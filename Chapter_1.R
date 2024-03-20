@@ -13,7 +13,7 @@ C <-rbinom(n= 10^6, size= N, prob= p) #simulating a one million counts to convey
 mean(C)
 var(C)
 sd(C)
-hist(C, breaks= 50, col= "Blue", main= "", xlab= "Sparrow Count", ylab= "Density", las= 1, freq= F) #frequency distributions of one million counts
+hist(C, breaks= 50, col= "Blue", main= "Figure 1.3", xlab= "Sparrow Count", ylab= "Density", las= 1, freq= F) #frequency distributions of one million counts
 
 #The typical count C is smaller than the actual population size N. Indeed, the mean of a binomial random variable and hence the expected count of sparrows, equals the product of N and p.
 #However, the counts vary quite a lot, even under totally identical conditions.Hence, there is nothing intrinsically wrong or inferior with smaller counts. Smaller counts may simply result from the random nature of the counting process in the presence of imperfect detection. Thus, any count with p< 1 will automatically tend to vary from trial to trial. Unless p= 0 or p= 1, it is impossible to eliminate that variation by the sampling design or standardization (though other components of variation may be eliminated).
