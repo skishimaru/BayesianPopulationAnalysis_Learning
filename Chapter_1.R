@@ -27,14 +27,14 @@ mu <- 65 #mean length of Jura mountain's mature asp viper population
 sigma <- 5 #sd  of Jura mountain's mature asp viper population 
 
 #Coding figure 1.5A
-x <- rnorm(n= 10, mean= mu, sd= sigma) #simulating a sample of 10 and summarizing results
+x <- rnorm(n= 10, mean= mu, sd= sigma) #simulating a single sample (measuring 10 vipers)
 
 #Coding figure 1.5B
 reps <- 10^6 #repeating one million times
-sample.means <- rep(NA, reps)
-for (i in 1:reps) {
+sample.means <- rep(NA, reps) #one million blank spots
+for (i in 1:reps) { 
   sample.means[i] <- mean(rnorm(n= 10, mean= mu, sd= sigma))
-}
+} #fills each rep spot with a random sample, ultimately simulating a million samples
 
 #Plotting Figure 1.5A and 1.5B
 par(mfrow= c(1,2), las= 1) #formatting a 2x1 plot
