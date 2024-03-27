@@ -1,0 +1,20 @@
+# 3.5 Binomial GLM for Modeling Bounded Counts or Proportions
+# 3.5.1 Generation and Analysis of Simulated Data
+#Fitting a Binomial GLM in JAGS
+sink("GLM_Binomial.txt")
+cat("
+model{
+
+#Priors
+alpha ~ dnorm(0, 0, 0.001)
+beta1 ~ dnorm(0, 0, 0.001)
+beta2 ~ dnorm(0, 0, 0.001)
+
+#Likelihood
+for (i in 1:nyears){
+C[i] ~ dbin(p[i], N[i]) #Distribution for rnadom part
+logit(p[i]) <- alpha + beta1*year[i] + beta2*pow(year[i],2) #Link function and linear predictor
+}
+}
+", fill= TRUE)
+sink()

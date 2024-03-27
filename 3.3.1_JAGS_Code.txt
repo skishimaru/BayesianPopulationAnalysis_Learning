@@ -1,0 +1,22 @@
+# 3.3 Poisson GLM in R and JAGS for Modeling Time Series Counts
+# 3.3.1 Generation and Analysis of Simulated Data
+#Fitting a Poisson GLM in JAGS
+sink("GLM_Poisson.txt")
+cat("
+model{
+
+#Priors
+alpha ~ dunif(-20, 20)
+beta1 ~ dunif(-10, 10)
+beta2 ~ dunif(-10, 10)
+beta3 ~dunif(-10,10)
+
+#Likelihood: Note key component of a GLM on one line each
+for (i in 1:n){
+C[i] ~ dpois(lambda[i]) #Distribution for random part
+log(lambda[i]) <- log.lambda[i] #Link function
+log.lambda[i] <- alpha + beta1*year[i] + beta2*pow(year[i],2) + beta3*pow(year[i], 3) #Linear predictor
+}
+}
+", fill= TRUE)
+sink()
