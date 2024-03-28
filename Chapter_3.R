@@ -17,9 +17,9 @@ hist(rbeta(10^6, 2, 4), nclass= 100, col= "gray")
 # 3.2.2 The Signal Component
 #-------------------------------------------------------------------------------
 #Example design matrix of a model using ANCOVA linear model
-y <- c(25, 14, 68, 79, 64, 139, 49, 119, 111)
-A <- factor(c(1, 1, 1, 2, 2, 2, 3, 3, 3))
-X <- c(1, 14, 22, 2, 9, 20, 2, 13, 22)
+y <- c(25, 14, 68, 79, 64, 139, 49, 119, 111) #the response
+A <- factor(c(1, 1, 1, 2, 2, 2, 3, 3, 3)) #a factor with 3 variables
+X <- c(1, 14, 22, 2, 9, 20, 2, 13, 22) #a continuous covariate
 plot(X,y,col= c(rep("red", 3), rep("blue", 3), rep("green", 3)),  xlim= c(-1, 25), ylim= c(0,140))
 
 summary(fm <- lm(y ~ A-1+X)) #Running ANCOVA
@@ -34,6 +34,7 @@ model.matrix(~A+X) %*% fm$coefficients #Obtaining the linear predictor or the ex
 # 3.3.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
 #Generates Poisson counts of peregrine falcon population in the French Jura mountains over n years
+#Poisson distribution is the standard model for unbounded count data
 #In this example, the linear predictor will be a cubic polynomial function of time
 data.fn <- function(n= 40, alpha= 3.5576, beta1= -0.0912, beta2= 0.0091, beta3= -0.00014){
   #n= number of years
@@ -56,7 +57,7 @@ data <- data.fn() #Output: population counts over 40 years and the trajectory ov
 fm <- glm(C~ year + I(year^2) + I(year^3),family= poisson, data= data)
 summary(fm)
 
-#DATA ANALYSIS 2: Bayesian Mode, using JAGS
+#DATA ANALYSIS 2: Bayesian Mode using JAGS, Bad Example
 #Specify model in JAGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
@@ -82,7 +83,7 @@ params <- c("alpha", "beta1", "beta2", "beta3", "lambda") #parameters monitored
 ni <- 2000 #number of iterations
 nt <- 2 #thinning rate
 nb <- 1000 #burn-in length
-nc <- 3 #number of chains
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
 
 #Call JAGS from R
 out <- jags(data  = jags.data,
@@ -96,13 +97,13 @@ out <- jags(data  = jags.data,
 print(out, dig = 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#Bad example because covariates are too far from zero and need to be standardized
 
-
-#DATA ANALYSIS 3:  
+#DATA ANALYSIS 3: Bayesian Mode using JAGS, standardization to reach convergence
 #Bundle data
 mean.year <- mean(data$year) #mean of year covariate
 sd.year <- sd(data$year) #SD of year covariate
-jags.data <- list(C= data$C, n= length(data$C), year= (data$year - mean.year)/sd.year)
+jags.data <- list(C= data$C, n= length(data$C), year= (data$year - mean.year)/sd.year) #standardize covariates
 
 #Call JAGS from R 
 out <- jags(data  = jags.data,
@@ -117,6 +118,8 @@ out <- jags(data  = jags.data,
 print(out, dig=3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+# In shiny stan we assume convergence because for parameter alpha rhat= 1.01 and the graph is grassy (strongly interspersed)
+#NOTE: we want a rhat value under 1.10 to assume convergence
 
 #DATA ANALYSIS 4: Non-Convergence
 #Repeat analysis with non convergence
@@ -139,6 +142,7 @@ print(tmp, dig=3)
 k<-mcmcplots::as.mcmc.rjags(tmp)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Plotting figure 3.2B
+#Plots the poisson means (lambda parameters) to represent the expected falcon counts each year and put them along the predicted values
 plot(1:40, data$C, lwd= 2, col= "black", main= "Figure 3.2B", las= 1, ylab= "Population Size", xlab= "Year")
 R.predictions <- predict(glm(C ~ year + I(year^2) + I(year^3), family= poisson, data= data), type= "response") #R predicted values
 lines(1:40, R.predictions, lwd= 3, col= "green") #graphing R predictions
@@ -152,9 +156,10 @@ cbind(R.predictions, JAGS.predictions) #comparing how similar they are
 # 3.3.2 Analysis of a Real Data Set
 #-------------------------------------------------------------------------------
 #Analyzing the true peregrine population breeding in Jura from 1964 to 2003
-peregrine <- read.table("falcons.txt", header= T) #WHERE DO WE GET THIS TXT?
+peregrine <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/falcons.txt", header= T) #read in falcon data
+#Falcon data contains adult pairs (Pairs), reproductive pairs (R.pairs), fledged young (Eyasses) for 40 years
 attach(peregrine) #attached data set so we can directly write variable names 
-plot(Year, Pairs, lwd= 2, main= "3.4A", las= 1, ylab= "Pair Count", xlab= "Year", ylim= c(0,200), pch= 16) #plotting the variable Pairs
+plot(Year, Pairs, lwd= 2, main= "Figure 3.4A", las= 1, ylab= "Pair Count", xlab= "Year", ylim= c(0,200), pch= 16) #plotting the "observed data", population size or the number of territorial pairs 
 
 #Fitting the model in JAGS
 #Bundle data
@@ -171,19 +176,27 @@ nb= 500
 nc= 3
 
 #Call JAGS from R
-out1 <- jags.model(data= jags.data, inits= inits, parameters.to.save= params, model.file= "GLM_Poisson.txt", n.chains= nc, n.thin= nt,
-             n.inter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
+out1 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.iter = ni,
+            n.burnin = nb)
 
 print(out1, dig=3) #summarize posteriors
-#convergence looks good so now we plot the predicted population trajectory
-JAGS.predictions <- out1$mean$lambda #Figure 3.4A
+k<-mcmcplots::as.mcmc.rjags(out1)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#alpha rhat= 1.02, and convergence based on trace plot looks good so now we plot the predicted population trajectory
+
+JAGS.predictions <- out1$BUGSoutput$mean$lambda #Adding the Bayesian posterior means to figure 3.4A
 lines(Year, JAGS.predictions, lwd= 3, col= "blue", lty= 2)
 #-------------------------------------------------------------------------------
 
 # 3.4 Poisson GLM for Modeling Fecundity
 #-------------------------------------------------------------------------------
-#Modeling fecundity of the same peregrine population
-plot(Year, Eyasses, lwd= 2, main= "3.4B", las= 1, ylab= "Nesting Count", xlab= "Year", ylim= c(0,260), pch= 16)
+#Modeling fecundity of the same peregrine population (Figure 3.4B)
+#Plotting a cubic polynomial of the number of fledged young by year using Bayesian analysis
+plot(Year, Eyasses, lwd= 2, main= "Figure 3.4B", las= 1, ylab= "Nesting Count", xlab= "Year", ylim= c(0,260), pch= 16) #observed total number of fledged young per year
 
 #Bundle data
 mean.year= mean(1:length(Year)) #mean of year covariate
@@ -191,18 +204,27 @@ sd.year= sd(1:length(Year)) #SD of year covariate
 jags.data <- list( C= Eyasses, n= length(Eyasses), year= 1:length(Year) - mean.year/sd.year)
 
 #Call JAGS from R
-out2 <- jags.model(data= jags.data, inits= inits, parameters.to.save= params, model.file= "GLM_Poisson.txt", n.chains= nc, n.thin= nt,
-             n.oter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
-#convergence looks good so now we plot figure 3.4B estimates
-JAGS.predictions <- out2$mean$lambda
+out2 <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.iter = ni,
+             n.burnin = nb)
+
+print(out2, dig=3) #summarize posteriors
+k<-mcmcplots::as.mcmc.rjags(out2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#alpha rhat= 5.83 and trace plot does not look good but the book assumes convergence was reached 
+
+#Now we plot the predicted population trajectory (blue line) on figure 3.4B
+JAGS.predictions <- out2$BUGSoutput$mean$lambda #Adding the Bayesian posterior means to figure 3.4B
 lines(Year, JAGS.predictions, lwd= 3, col= "blue")
-
-
 #-------------------------------------------------------------------------------
 
 # 3.5 Binomial GLM for Modeling Bounded Counts or Proportions
 # 3.5.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
+#A binomial distribution is the standard model for bounded count data (usually bounded by an upper limit, ex. modeling females in a population is bounded by the total population or modeling survival where count can't exceed 1)
 data.fn <- function(nyears= 40, alpha= 0, beta1= -0.1, beta2= -0.9) {
   #nyears= number of years 
   #coefficients= alpha, beta1, beta2
@@ -221,14 +243,29 @@ data.fn <- function(nyears= 40, alpha= 0, beta1= -0.1, beta2= -0.9) {
   C <- rbinom(n= nyears, size= N, prob= exp.p)
   
   #Plot simulated data
-  plot(year, C/N, lwd= 2, col= "black", main="", las= 1, ylab= "Proportion Successful Pairs", xlab= "Year", ylim= c(0,1))
-  points(year, exp.p, lwd= 3, col= "red")
+  plot(year, C/N, lwd= 2, col= "black", main="", las= 1, ylab= "Proportion Successful Pairs", xlab= "Year", ylim= c(0,1)) #Plots observed proportion of successful pairs in the population
+  points(year, exp.p, lwd= 3, col= "red") #Plots expected proportion of successful pairs in the population
   return(list(nyears=nyears, alpha=alpha, beta1=beta1, beta2=beta2, year=year, YR=YR, exp.p=exp.p, C=C, N=N))
 }
 
 data <- data.fn(nyears= 40, alpha= 1, beta1= 0.03, beta2= -0.9) #data set inspired by section 3.5.2
 
-#model was set up in textfile "3.5.1_JAGS_Code"
+#Specify model in JAGS language
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  alpha ~ dnorm(0, 0.001) 
+  beta1 ~ dnorm(0, 0.001) 
+  beta2 ~ dnorm(0, 0.001) 
+  
+  #Likelihood: Note key components of a GLM on one line each
+  for (i in 1:nyears){
+    C[i] ~ dbinom(p[i], N[i]) # 1. Distribution for random part 
+    logit(p[i]) <- alpha + beta1 * year[i] + beta2 * (year[i]*year[i]) # 3. Linear predictor, CHANGED FROM pow() to year*year because pow() does not work in JAGS
+  }
+  
+} #model function
+
 #Bundle data
 jags.data <- list(C= data$C, N= data$N, nyears= length(data$C), year= data$YR)
 
@@ -242,17 +279,26 @@ nb <- 500
 nc <- 3
 
 #Call JAGS from R
-out <- jags.model(data=jags.data, inits=inits, parameters.to.save=params, model.file="GLM_Binomial.txt", n.chains= nc, n.thin= nt, n.inter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
+out <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.iter = ni,
+             n.burnin = nb)
 
-#convergence looks good so now we plot the predicted proportion of successful pairs
-JAGS.predictions <- out$mean$p
+print(out, dig=3) #summarize posteriors
+k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#alpha rhat= 1.02, and convergence based on trace plot looks good so now we plot the estimated proportion of successful pairs
+
+JAGS.predictions <- out$BUGSoutput$mean$p #Adding the Bayesian estimated proportion of successful pairs 
 lines(1:length(data$C), JAGS.predictions, lwd= 3, col= "blue", lty= 2)
 #-------------------------------------------------------------------------------
 
 # 3.5.2 Analysis of a Real Data Set
 #-------------------------------------------------------------------------------
 #Read data and attach them
-peregrine <- read.table("falcons.txt", header= T)
+peregrine <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/falcons.txt", header= T)
 attach(peregrine)
 
 #Bundle data (note another standardization for year)
@@ -271,10 +317,20 @@ nb <- 500
 nc <- 3
 
 #Call JAGS from R
-out3 <- jags.model(data= jags.data, inits= inits, parameters.to.save= params, modle.file= "GLM_Binomial.txt", n.chains= nc, n.thin= nt, n.inter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
+out3 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.iter = ni,
+            n.burnin = nb)
 
 #Summarize posteriors and plot estimates
-print(out3, dig= 3)
-plot(Year, R.Pairs/Pairs, lwd= 2, col= "black", main= "Figre 3.4C", las= 1, ylab= "Proportion Successful Pairs", xlab= "Year", ylim= c(0,1))
-lines(Year, out3$mean$p, lwd= 3, col= "blue")
+print(out3, dig= 3) #summarize posteriors
+k<-mcmcplots::as.mcmc.rjags(out3)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#alpha rhat= 1.0, and convergence based on trace plot looks grassy so now we plot the predicted proportion of successful pairs
+
+
+plot(Year, R.Pairs/Pairs, lwd= 2, col= "black", main= "Figre 3.4C Real Data", las= 1, ylab= "Proportion Successful Pairs", xlab= "Year", ylim= c(0,1)) #Plots observed proportion of successful pairs in the population
+lines(Year, out3$BUGSoutput$mean$p, lwd= 3, col= "blue") #Plots Bayesian posterior mean
 #-------------------------------------------------------------------------------
