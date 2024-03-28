@@ -1,6 +1,10 @@
 # Bayesian Population Analysis using WinBUGS
 # Chapter 3: Introduction to the Generalized Linear Model: The Simplest Model for Count Data
 
+library(R2jags) #to run JAGS
+library(shinystan) #to run shiny stan
+library(tidyverse) #to utilize pipe operators
+
 # 3.2 Statistical Models: Response = Signal + Noise
 # 3.2.1 The Noise Component
 #-------------------------------------------------------------------------------
@@ -48,40 +52,73 @@ data <- data.fn() #Output: population counts over 40 years and the trajectory ov
 #Black line= realized population size
 #Red line= Expected population size
 
-#Data analysis 1: Frequentist Mode, using maximum likelihood
+#DATA ANALYSIS 1: Frequentist Mode, using maximum likelihood
 fm <- glm(C~ year + I(year^2) + I(year^3),family= poisson, data= data)
 summary(fm)
 
-#Data analysis 2: Bayesian Mode, using JAGS
-#model was set up in textfile "3.3.1_JAGS_Code"
-jags.dir <- "C:" #NEED FOR JAGS?
-jags.data <- list(C= data$C, n= lenght(data$C), year= data$year) #Bundle data
-inits <- functions()list(alpha= runif(1,-2,2), beta1= runif(1,-3,3)) #initial values
+#DATA ANALYSIS 2: Bayesian Mode, using JAGS
+#Specify model in JAGS language
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  alpha ~ dunif(-20, 20) 
+  beta1 ~ dunif(-10, 10)
+  beta2 ~ dunif(-10, 10)
+  beta3 ~ dunif(-10, 10)
+  
+  #Likelihood: Note key components of a GLM on one line each
+  for (i in 1:n){
+    C[i] ~ dpois(lambda[i]) # 1. Distribution for random part 
+    log(lambda[i]) <- alpha + beta1 * year[i] + beta2 * (year[i]*year[i]) + beta3 * (year[i]*year[i]*year[i]) # 3. Linear predictor, CHANGED FROM pow() to year*year because pow() does not work in JAGS
+  }
+  
+} #model function
+
+jags.data <- list(C= data$C, n= length(data$C), year= data$year) #Bundle data
+inits <- function() list(alpha= runif(1,-2,2), beta1= runif(1,-3,3)) #initial values
 params <- c("alpha", "beta1", "beta2", "beta3", "lambda") #parameters monitored
 
 #MCMC settings
-ni <- 2000 #number of draws per chain
+ni <- 2000 #number of iterations
 nt <- 2 #thinning rate
 nb <- 1000 #burn-in length
 nc <- 3 #number of chains
 
 #Call JAGS from R
-out <- jags.model(data= jags.data, inits=inits, paraeters.to.save= params, model.file= "GLM_Poisson.txt", n.chains= nc, n.thin= nt,
-            n.inter= ni, n.bunin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
-#This example causes JAGS to crash due to "undefined real result" or that the covariates were too far away from zero 
-#fixing this error
+out <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.iter = ni,
+            n.burnin = nb)
 
+print(out, dig = 3)
+
+k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+
+#DATA ANALYSIS 3:  
 #Bundle data
 mean.year <- mean(data$year) #mean of year covariate
 sd.year <- sd(data$year) #SD of year covariate
 jags.data <- list(C= data$C, n= length(data$C), year= (data$year - mean.year)/sd.year)
 
 #Call JAGS from R 
-out <- jags.model(data= jags.data, inits= inits, parameters.to.save= params, model.file= "GLM_Poisson.txt", n.chains= nc, n.thin= nt, n.inter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
+out <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.iter = ni,
+            n.burnin = nb)
 
 #Summarize posteriors
 print(out, dig=3)
 
+k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#DATA ANALYSIS 4: Non-Convergence
 #Repeat analysis with non convergence
 #New MCMC settings with essentially no burn-in
 ni <- 100 #number of draws per chain
@@ -89,14 +126,23 @@ nt <- 1 #thinning rate
 nb <- 1 #burn-in length
 
 #Call JAGS from R
-tmp <- jags.model(data= jags.data, inits= inits, parameters.to.save= params,
-            model.file= "GLM_Poisson.txt", n.chains= nc, n.thin= nt, n.inter= ni, n.burnin= nb, debug= T, jags.directory= jags.dir, working.directory= getwd())
+tmp <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(tmp, dig=3)
+
+k<-mcmcplots::as.mcmc.rjags(tmp)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Plotting figure 3.2B
 plot(1:40, data$C, lwd= 2, col= "black", main= "Figure 3.2B", las= 1, ylab= "Population Size", xlab= "Year")
 R.predictions <- predict(glm(C ~ year + I(year^2) + I(year^3), family= poisson, data= data), type= "response") #R predicted values
 lines(1:40, R.predictions, lwd= 3, col= "green") #graphing R predictions
-JAGS.predictions <- out$mean$lambda #JAGS predicted values
+JAGS.predictions <- out$BUGSoutput$mean$lambda #JAGS predicted values
 lines(1:40, JAGS.predictions, lwd= 3, col= "blue", lty= 2) #graphing JAGS predictions
 #this shows that the inferences from the R (frequentist mode) and JAGS (Bayesian mode) are numerically similar
 
@@ -205,7 +251,7 @@ lines(1:length(data$C), JAGS.predictions, lwd= 3, col= "blue", lty= 2)
 
 # 3.5.2 Analysis of a Real Data Set
 #-------------------------------------------------------------------------------
-#Read data and attech them
+#Read data and attach them
 peregrine <- read.table("falcons.txt", header= T)
 attach(peregrine)
 
