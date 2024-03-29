@@ -11,7 +11,7 @@ library(tidyverse) #to utilize pipe operators
 
 #-------------------------------------------------------------------------------
 
-# 4.2 Accounting for Overdispersion by Ransom Effects: Modeling in R and WinBUGS
+# 4.2 Accounting for Overdispersion by Ransom Effects: Modeling in R and JAGS
 # 4.2.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
 
