@@ -32,7 +32,7 @@ abline((lmm@beta[1] + ranef(lmm)$pop)[2,], lmm@beta[2], col= "blue", lwd= 3) ##C
 abline((lmm@beta[1] + ranef(lmm)$pop)[3,], lmm@beta[2], col= "green", lwd= 3) ##CHANGED lmm@fixef to lmm@beta to correctly plot
 #-------------------------------------------------------------------------------
 
-# 4.2 Accounting for Overdispersion by Ransom Effects: Modeling in R and JAGS
+# 4.2 Accounting for Overdispersion by Random Effects: Modeling in R and JAGS
 # 4.2.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
 data.fn <- function(n= 40, alpha= 3.5576, beta1= -0.0912, beta2= 0.0091, beta3= -0.00014, sd= 0.1){
