@@ -259,5 +259,440 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 
 # 4.3.2 Analysis of a Real Data Set
 #-------------------------------------------------------------------------------
+tits <- read.table("tits.txt", header= T) #read in the data
+str(tits)
 
+C <- as.matrix(tits[5:13])
+obs <- as.matrix(tits[14:22])
+first <- as.matrix(tits[23:31])
+
+matplot(1999:2007, t(C), lty= 1, lwd= 2, main= "Figure 4.5", las= 1, ylab= "Territory counts", xlab= "Year", ylim= c(0, 80), frame= F)
+
+table(obs)
+length(table(obs))
+apply(first, 2, sum, na.rm= T)
+
+a <- as.numeric(levels(factor(obs))) #all the levels, numeric
+newobs <- ob #get ObsID from 1:271
+for (j in 1:length(a)){newobs[which(obs==a[j])] <- j}
+
+newobs[is.na(newobs)] <- 272
+table(newobs)
+first[is.na(first)] <- 0
+table(first)
+
+#MODEL 1: Null or Intercept only
+#A constant expected count throughtout space and time
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  alpha ~ dnorm(0, 0.01) #log(mean count)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j]) 
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- alpha
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C)) #Bundle data
+inits <- function() list(alpha= runif(1, -10, 10)) #initial values
+params <- c("alpha") #parameters monitored
+
+#MCMC settings
+ni <- 1200 #number of iterations
+nt <- 2 #thinning rate
+nb <- 200 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out0 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(out0, dig = 3)
+
+k<-mcmcplots::as.mcmc.rjags(out0)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#Good start but not a great model
+
+#MODEL 2: Fixed Site Effects
+#Essentially a one-way ANOVA, except that its a Poisson rather than a normal response
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0,0.01) #site effects
+  }
+ 
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j]) 
+      lambda[i,j] <- exp(log.lambda[i,j]) 
+      log.lambda[i,j] <- alpha[j]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data, standardized
+inits <- function() list(alpha= runif(235, -1, 1)) #initial values
+params <- c("alpha") #parameters monitored
+
+#MCMC settings
+ni <- 1200 #number of iterations
+nt <- 2 #thinning rate
+nb <- 200 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out1 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(out1, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out1)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#Adding the site effects greatly improved the fit of the model and deviance and DIC has gone down. So now lets add fixed year effects
+
+#MODEL 3: Fixed Site and Fixed Year Effects
+#A two-way main-effects ANOVA for a Poisson response
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0, 0.01) #site effects
+  }
+  for (i in 2:nyear){ #nyear-1 year effects
+    esp[i] ~ dnorm(0, 0.01)
+  }
+  eps[1] <- 0 #Aliased
+  
+  #Likelihood: Note key components of a GLM on one line each
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j]) 
+      log.lambda[i,j] <- alpha[j] + eps[i]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= col(C)) #Bundle data
+inits <- function() list(alpha= runif(235, -1, 1), eps= c(NA, runif(8, -1, 1))) #initial values
+params <- c("alpha", "eps") #parameters monitored
+
+#MCMC settings
+ni <- 1200 #number of iterations
+nt <- 2 #thinning rate
+nb <- 200 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out2 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(out2, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#Again deviance and DIC has gone down and we can see annual population fluctuations. Now lets continue to build on the model by adding random instead of fixed effects
+
+#MODEL 4: Random Site Effects (No Year Effects)
+#The linear predictor of this model is that of a one-way, random-effects ANOVA
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(mu.alpha, tau.alpha) #Random site effects
+  }
+  mu ~ dnorm(0, 0.01) #Hyperparameter 1
+  tau.alpha <- 1/(sd.alpha*sd.alpha) #Hyperparameter 2
+  sd.alpha ~ dunif(0, 5)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- alpha[j]
+      }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data
+inits <- function() list(mu= runif(1,2,3)) #initial values
+params <- c("alpha", "mu.alpha", "sd.alpha") #parameters monitored
+
+#MCMC settings
+ni <- 1200 #number of iterations
+nt <- 2 #thinning rate
+nb <- 200 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out3 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(out3, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out3)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#The mass of the posterior distribution of the standard deviation of the random site effects is concentrated away from zero, which confirms our conclusion that sites differ substantially in expected counts
+#Next let's add random year effects and re-parameterize the model to have a single grand mean to help convergence
+
+#MODEL 5: Random Site and Random Year Effects
+#A linear model that corresponds to a main-effect ANOVA with two random factors. Now we no longer need to constrain one effect of one factor to zero to avoid overparameterization. The borrowing strength among parameters within the same random-effects factor ensures that all can be estimated
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  mu ~ dnorm(0, 0.01)
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
+  }
+  tau.alpha <- 1/(sd.alpha*sd.alpha)
+  sd.alpha ~ dunif(0, 5)
+  
+  for (i in 1:nyear){
+    eps[i] ~ dnorm(0, tau.eps) #random year effects
+  }
+  tau.eps <- 1/(sd.eps*sd.eps)
+  sd.eps ~ dunif(0,3)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- mu + alpha[j] + eps[i]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data
+inits <- function() list(mu= runif(1, 2, 3), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
+params <- c("mu", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
+
+#MCMC settings
+ni <- 6000 #number of iterations
+nt <- 5 #thinning rate
+nb <- 1000 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out4 <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.thin= nt,
+             n.iter = ni,
+             n.burnin = nb)
+
+print(out4, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out4)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#The year effects do not seem to be very different at any rate, they (sd.eps) are much smaller than the variation of counts among sites (sd.alpha). Next we add a fixed first-year observer effect
+
+#MODEL 6: Random Site and Random ear Effects and First-Year Fixed Observer Effect
+#Analogous to a three-way ANOVA with two factors random and one fixed and all of them acting in an additive way
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  mu ~ dnorm(0, 0.01) #overall mean
+  beta2 ~ dnorm(0, 0.01) #first-year observer effect
+  
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
+  }
+  tau.alpha <- 1/(sd.alpha*sd.alpha)
+  sd.alpha ~ dunif(0, 5)
+  
+  for (i in 1:nyear){
+    eps[i] ~ dnorm(0, tau.eps) #random year effects
+  }
+  tau.eps <- 1/(sd.eps*sd.eps)
+  sd.eps ~ dunif(0,5)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- mu + beta2*first[i,j] + alpha[j] + eps[i]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), first= t(first)) #Bundle data
+inits <- function() list(mu= runif(1, 0, 4), beta2= runif(1, -1, 1), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
+params <- c("mu", "beta", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
+
+#MCMC settings
+ni <- 6000 #number of iterations
+nt <- 5 #thinning rate
+nb <- 1000 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out5 <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.thin= nt,
+             n.iter = ni,
+             n.burnin = nb)
+
+print(out5, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out5)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#Beta2=0, so there is no evidence for a first year effect. Next we'll add an overall linear time trend
+
+#Model 7: Random Site and Random Year Effects, First-Year Fixed Observer Effect, and Overall Linear Time Trend
+#The linear part of the model corresponds to an analysis of covariance (ANCOVA. In addition to the three factors of the previous model, an added effect of one continuous covariate
+#Specify the model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  mu ~ dnorm(0, 0.01) #overall intercept
+  beta1 ~ dnorm(0, 0,01) #overall trend
+  beta2 ~ dnrom(0, 0.01) #first-year observer effect
+  
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
+  }
+  tau.alpha <- 1/(sd.alpha*sd.alpha)
+  sd.alpha ~ dunif(0, 5)
+  
+  for (i in 1:nyear){
+    eps[i] ~ dnorm(0, tau.eps) #random year effects
+  }
+  tau.eps <- 1/(sd.eps*sd.eps)
+  sd.eps ~ dunif(0,3)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- mu + beta1*year[i] + beta2*first[i,j] + alpha[j] + eps[i]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), first= t(first), year= ((1:9)-5)/4) #Bundle data
+inits <- function() list(mu= runif(1, 0, 4), beta1= runif(1, -1, 1), beta2= runif(1, -1, 1), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
+params <- c("mu", "beta1", "beta2", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
+
+#MCMC settings
+ni <- 12000 #number of iterations
+nt <- 6 #thinning rate
+nb <- 6000 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out6 <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.thin= nt,
+             n.iter = ni,
+             n.burnin = nb)
+
+print(out6, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out6)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#MODEL 8: The Full Model
+#Final model with random site effects, an overall linear time trend, random observer effects, random year effects, and a fixed first-year observer effect. We constrain the random effects standard deviations sufficiently so that JAGS doesn't get lost numerically and increase chain length
+#Specify the model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  mu ~ dnorm(0, 0.01) #overall intercept
+  beta1 ~ dnorm(0, 0,01) #overall trend
+  beta2 ~ dnrom(0, 0.01) #first-year observer effect
+  
+  for (j in 1:nsite){
+    alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
+  }
+  tau.alpha <- 1/(sd.alpha*sd.alpha)
+  sd.alpha ~ dunif(0, 3)
+  
+  for (i in 1:nyear){
+    eps[i] ~ dnorm(0, tau.eps) #random year effects
+  }
+  tau.eps <- 1/(sd.eps*sd.eps)
+  sd.eps ~ dunif(0,1)
+  
+  for (k in 1:nobs){
+    gamma[k] ~ dnorm(0, tau.gamma) #random observer effect
+  }
+  tau.gamma <- 1/(sd.gamma*sd.gamma)
+  sd.gamma ~dunif(0,1)
+  
+  #Likelihood:
+  for (i in 1:nyear){
+    for (j in 1:nsite){
+      C[i,j] ~ dpois(lambda[i,j])
+      lambda[i,j] <- exp(log.lambda[i,j])
+      log.lambda[i,j] <- mu + beta1*year[i] + beta2*first[i,j] + alpha[j] + gamma[newobs[i,j]] + eps[i]
+    }
+  }
+}
+
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), nobs= 272, newobs= t(newobs), first= t(first), year= ((1:9)-5)/4) #Bundle data
+inits <- function() list(mu= runif(1, 0, 4), beta1= runif(1, -1, 1), beta2= runif(1, -1, 1), alpha= runif(235, -1, 1), gamma= runif(272, -1, 1), eps= runif(9, -1, 1)) #initial values
+params <- c("mu", "beta1", "beta2", "alpha", "gamma", "eps", "sd.alpha", "sd.eps") #parameters monitored
+
+#MCMC settings
+ni <- 12000 #number of iterations
+nt <- 6 #thinning rate
+nb <- 6000 #burn-in length
+nc <- 3 #number of chains, we run multiple chains to check for convergence 
+
+#Call JAGS from R
+out7 <- jags(data  = jags.data,
+             inits = inits,
+             parameters.to.save = params,
+             model.file = jags.model.txt,
+             n.chains = nc,
+             n.thin= nt,
+             n.iter = ni,
+             n.burnin = nb)
+
+print(out7, dig = 2)
+
+k<-mcmcplots::as.mcmc.rjags(out7)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#The most variation in coal tit counts are due to differences among site and differences among observers. There is also a small variance component due to years. 
 #-------------------------------------------------------------------------------
