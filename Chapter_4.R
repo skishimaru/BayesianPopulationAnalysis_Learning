@@ -259,7 +259,7 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 
 # 4.3.2 Analysis of a Real Data Set
 #-------------------------------------------------------------------------------
-tits <- read.table("tits.txt", header= T) #read in the data
+tits <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/tits.txt", header= T) #read in the data
 str(tits)
 
 C <- as.matrix(tits[5:13])
