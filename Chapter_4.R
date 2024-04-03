@@ -266,14 +266,14 @@ C <- as.matrix(tits[5:13])
 obs <- as.matrix(tits[14:22])
 first <- as.matrix(tits[23:31])
 
-matplot(1999:2007, t(C), lty= 1, lwd= 2, main= "Figure 4.5", las= 1, ylab= "Territory counts", xlab= "Year", ylim= c(0, 80), frame= F)
+matplot(1999:2007, t(C), type= "l", lty= 1, lwd= 2, main= "Figure 4.5", las= 1, ylab= "Territory counts", xlab= "Year", ylim= c(0, 80), frame= F)
 
 table(obs)
 length(table(obs))
 apply(first, 2, sum, na.rm= T)
 
 a <- as.numeric(levels(factor(obs))) #all the levels, numeric
-newobs <- ob #get ObsID from 1:271
+newobs <- obs #get ObsID from 1:271
 for (j in 1:length(a)){newobs[which(obs==a[j])] <- j}
 
 newobs[is.na(newobs)] <- 272
