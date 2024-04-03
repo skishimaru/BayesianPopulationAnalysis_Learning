@@ -9,7 +9,7 @@ library(lme4) #for REML method (section 4.1)
 # 4.1 Introduction
 # 4.1.1 An Example
 #-------------------------------------------------------------------------------
-#We examined nine individuals asp vipers in three different populations to study the mass-length relationship
+#We examined nine individuals asp vipers in each of the three different populations to study the mass-length relationship
 #Plotting figure 4.1
 mass <- c(25, 14, 68, 79, 64, 139, 49, 119, 111)
 pop <- factor(c(1, 1, 1, 2, 2, 2, 3, 3, 3))
@@ -18,6 +18,8 @@ plot(length, mass, col= c(rep("red", 3), rep("blue", 3), rep("green", 3)), xlim=
 #The plot suggests a linear relationship between mass and length with a different baseline in each population
 
 #Fit fixed-effect model: print regression parameter estimates and plot regression lines
+#Fixed model= the three snake populations are the only populations we are interested in
+#Assumption 1: the snake population effects are completely independent
 #Dotted Lines= Estimated regressions for each population under an ANCOVA model with fixed effects
 summary(lm <- lm(mass~ pop-1 + length))
 abline(lm$coef[1], lm$coef[4], col= "red", lwd= 3, lty= 2)
@@ -25,7 +27,9 @@ abline(lm$coef[2], lm$coef[4], col="blue", lwd= 3, lty= 2)
 abline(lm$coef[3], lm$coef[4], col= "green", lwd= 3, lty= 2)
 
 #Fit mixed model: print random effects and plot regression lines
-# Solid lines= Estimated regressions under a mixed ANCOVA model with random effects (intercepts)
+#Mixed model= The three snake populations represent a sample of a larger number of populations and we want to generalize our conclusions to the larger statisitcal population of snake populations
+#Assumption 2: the snake population effects are not independent, instead a sample of the larger number of effects that could have appeared within the study 
+#Solid lines= Estimated regressions under a mixed ANCOVA model with random effects (intercepts)
 summary(lmm <- lmer(mass ~ length + (1|pop)))
 abline((lmm@beta[1] + ranef(lmm)$pop)[1,], lmm@beta[2], col= "red", lwd= 3) ##CHANGED lmm@fixef to lmm@beta to correctly plot
 abline((lmm@beta[1] + ranef(lmm)$pop)[2,], lmm@beta[2], col= "blue", lwd= 3) ##CHANGED lmm@fixef to lmm@beta to correctly plot
@@ -72,7 +76,7 @@ glmm.fit <- glmer(C ~ (1|yr) + cov1 + cov2 + cov3, family= poisson, data= data)
 glmm.fit
 
 R.predictions <- exp(fixef(glmm.fit)[1] + fixef(glmm.fit)[2]*cov1 + fixef(glmm.fit)[3]*cov2 +fixef(glmm.fit)[4]*cov3 + unlist(ranef(glmm.fit)))
-lines(data$year, R.predictions, col= "green", lwd= 2)
+lines(data$year, R.predictions, col= "green", lwd= 2) #Plotting estimated population trajectories from frequentist mode (green= REML in lmer)
 
 #DATA ANALYSIS 2: Bayesian Mode using JAGS
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -118,7 +122,7 @@ print(out, dig = 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 JAGS.predictions <- out$BUGSoutput$mean$lambda #JAGS predicted values
-lines(data$year, JAGS.predictions, col= "blue", lwd= 2, lty= 2)
+lines(data$year, JAGS.predictions, col= "blue", lwd= 2, lty= 2) #plotting estimated population trajectories from a bayesian perspective in JAGS (blue= posterior means), pretty similar to the frequentisit perspective
 
 #Comparing standard error of the regression estimates under GLM and GLMM
 glm.fit <- glm(C ~ cov1 + cov2 + cov3, family= poisson, data= data)
@@ -141,7 +145,7 @@ cov1 <- (peregrine$Year - mny)/sdy
 cov2 <- cov1*cov1
 cov3 <- cov1*cov1*cov1
 glmm <- glmer(peregrine$Pairs ~ (1|yr) + cov1 + cov2 + cov3, family= poisson, data= peregrine)
-glmm #Standard Deviation = 0.10
+glmm #Overdispersion Standard Deviation = 0.10
 
 #DATA ANALYSIS 2: Bayesian Mode using JAGS
 jags.data <- list(C= peregrine$Pairs, n= length(peregrine$Pairs), year= cov1)
@@ -162,7 +166,7 @@ out <- jags(data  = jags.data,
             n.iter = ni,
             n.burnin = nb)
 
-print(out, dig = 3) #Standard Deviation= 0.12
+print(out, dig = 3) #Standard Deviation= 0.12, similar to analysis 1
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
 
@@ -198,7 +202,7 @@ data.fn <- function(nsite= 5, nyear= 40, alpha= 4.18456,beta1= 1.90672, beta2= 0
     #Second level of noise: generate random part of the GLM: Poission noise around expected counts
     C[,j] <- rpois(n= nyear, lambda= expected.count)
   }
-  matplot(year, C, type= "l", lty= 1, lwd= 2, main= "Figure 4.3", las= 1, ylab= "Population size", xlab= "Year")
+  matplot(year, C, type= "l", lty= 1, lwd= 2, main= "Figure 4.3", las= 1, ylab= "Population size", xlab= "Year") #100 replicate population trajectories with additive random site and year effects. A single stochastic process can produce very different outcomes
   return(list(nsite= nsite, nyear= nyear, alpha.site= alpha.site, beta1= beta1, beta2= beta2, beta3= beta3, year= year, sd.site= sd.site, sd.year= sd.year, expected.count= expected.count, C= C))
 }
 
@@ -266,7 +270,7 @@ C <- as.matrix(tits[5:13])
 obs <- as.matrix(tits[14:22])
 first <- as.matrix(tits[23:31])
 
-matplot(1999:2007, t(C), type= "l", lty= 1, lwd= 2, main= "Figure 4.5", las= 1, ylab= "Territory counts", xlab= "Year", ylim= c(0, 80), frame= F)
+matplot(1999:2007, t(C), type= "l", lty= 1, lwd= 2, main= "Figure 4.5", las= 1, ylab= "Territory counts", xlab= "Year", ylim= c(0, 80), frame= F) #the metapopulation seems to fluctuate around a fairly constant level,s owe only consider a linear regression of counts
 
 table(obs)
 length(table(obs))
@@ -282,7 +286,7 @@ first[is.na(first)] <- 0
 table(first)
 
 #MODEL 1: Null or Intercept only
-#A constant expected count throughtout space and time
+#A constant expected count throughout space and time
 #Specify model in JAGS
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
@@ -322,7 +326,7 @@ out0 <- jags(data  = jags.data,
 print(out0, dig = 3)
 
 k<-mcmcplots::as.mcmc.rjags(out0)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
-#Good start but not a great model
+#Good start but not a great model, shows us the mean observed density per 1km^2 is exp(2.67)= 14.4, where 2.67 is the mean alpha value
 
 #MODEL 2: Fixed Site Effects
 #Essentially a one-way ANOVA, except that its a Poisson rather than a normal response
@@ -344,7 +348,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data, standardized
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C)) #Bundle data, standardized
 inits <- function() list(alpha= runif(235, -1, 1)) #initial values
 params <- c("alpha") #parameters monitored
 
@@ -377,10 +381,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors
   for (j in 1:nsite){
     alpha[j] ~ dnorm(0, 0.01) #site effects
-  }
+    }
   for (i in 2:nyear){ #nyear-1 year effects
-    esp[i] ~ dnorm(0, 0.01)
-  }
+    eps[i] ~ dnorm(0, 0.01)
+    }
   eps[1] <- 0 #Aliased
   
   #Likelihood: Note key components of a GLM on one line each
@@ -393,7 +397,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= col(C)) #Bundle data
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C)) #Bundle data
 inits <- function() list(alpha= runif(235, -1, 1), eps= c(NA, runif(8, -1, 1))) #initial values
 params <- c("alpha", "eps") #parameters monitored
 
@@ -427,7 +431,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (j in 1:nsite){
     alpha[j] ~ dnorm(mu.alpha, tau.alpha) #Random site effects
   }
-  mu ~ dnorm(0, 0.01) #Hyperparameter 1
+  mu.alpha ~ dnorm(0, 0.01) #Hyperparameter 1
   tau.alpha <- 1/(sd.alpha*sd.alpha) #Hyperparameter 2
   sd.alpha ~ dunif(0, 5)
   
@@ -441,8 +445,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data
-inits <- function() list(mu= runif(1,2,3)) #initial values
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C)) #Bundle data
+inits <- function() list(mu.alpha= runif(1,2,3)) #initial values
 params <- c("alpha", "mu.alpha", "sd.alpha") #parameters monitored
 
 #MCMC settings
@@ -496,7 +500,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C)) #Bundle data
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C)) #Bundle data
 inits <- function() list(mu= runif(1, 2, 3), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
 params <- c("mu", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
 
@@ -552,9 +556,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), first= t(first)) #Bundle data
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C), first= t(first)) #Bundle data
 inits <- function() list(mu= runif(1, 0, 4), beta2= runif(1, -1, 1), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
-params <- c("mu", "beta", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
+params <- c("mu", "beta2", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
 
 #MCMC settings
 ni <- 6000 #number of iterations
@@ -584,8 +588,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Priors
   mu ~ dnorm(0, 0.01) #overall intercept
-  beta1 ~ dnorm(0, 0,01) #overall trend
-  beta2 ~ dnrom(0, 0.01) #first-year observer effect
+  beta1 ~ dnorm(0, 0.01) #overall trend
+  beta2 ~ dnorm(0, 0.01) #first-year observer effect
   
   for (j in 1:nsite){
     alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
@@ -609,7 +613,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), first= t(first), year= ((1:9)-5)/4) #Bundle data
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C), first= t(first), year= ((1:9)-5)/4) #Bundle data
 inits <- function() list(mu= runif(1, 0, 4), beta1= runif(1, -1, 1), beta2= runif(1, -1, 1), alpha= runif(235, -2, 2), eps= runif(9, -1, 1)) #initial values
 params <- c("mu", "beta1", "beta2", "alpha", "eps", "sd.alpha", "sd.eps") #parameters monitored
 
@@ -640,8 +644,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Priors
   mu ~ dnorm(0, 0.01) #overall intercept
-  beta1 ~ dnorm(0, 0,01) #overall trend
-  beta2 ~ dnrom(0, 0.01) #first-year observer effect
+  beta1 ~ dnorm(0, 0.01) #overall trend
+  beta2 ~ dnorm(0, 0.01) #first-year observer effect
   
   for (j in 1:nsite){
     alpha[j] ~ dnorm(0, tau.alpha) #Random site effects
@@ -671,7 +675,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
 }
 
-jags.data <- list(C= t(C), nsite= nrow(C), nyear= nrow(C), nobs= 272, newobs= t(newobs), first= t(first), year= ((1:9)-5)/4) #Bundle data
+jags.data <- list(C= t(C), nsite= nrow(C), nyear= ncol(C), nobs= 272, newobs= t(newobs), first= t(first), year= ((1:9)-5)/4) #Bundle data
 inits <- function() list(mu= runif(1, 0, 4), beta1= runif(1, -1, 1), beta2= runif(1, -1, 1), alpha= runif(235, -1, 1), gamma= runif(272, -1, 1), eps= runif(9, -1, 1)) #initial values
 params <- c("mu", "beta1", "beta2", "alpha", "gamma", "eps", "sd.alpha", "sd.eps") #parameters monitored
 
