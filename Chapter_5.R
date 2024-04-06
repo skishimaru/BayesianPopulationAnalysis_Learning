@@ -18,7 +18,7 @@ sigma2.y <- 20 #Variance of the observation error
 y <- N <- numeric(n.years)
 N[1] <- N1
 lambda <- rnorm(n.years-1, mean.lambda, sqrt(sigma2.lambda))
-for (t in 1:(nyears-1)){
+for (t in 1:(n.years-1)){
   N[t+1] <- N[t]*lambda[t]
 }
 
@@ -53,7 +53,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 jags.data <- list(y= y, T= n.years) #Bundle data
-inits <- function(){list(sigma.proc= runif(1, 0, 5), mean.lambda= runif(1, 0.1, 2), sigma.obs= runif(1, 0, 10), N.est= c(runif(1, 20, 40), rep(NA, (nyears-1))))} #initial values
+inits <- function(){list(sigma.proc= runif(1, 0, 5), mean.lambda= runif(1, 0.1, 2), sigma.obs= runif(1, 0, 10), N.est= c(runif(1, 20, 40), rep(NA, (n.years-1))))} #initial values
 params <- c("lambda", "mean.lambda", "sigma2.obs", "sigma2.proc", "N.est") #parameters monitored
 
 #MCMC settings
@@ -80,11 +80,11 @@ k<-mcmcplots::as.mcmc.rjags(ssm)%>%as.shinystan()%>%launch_shinystan() #making i
 #Define function to draw a graph to summarize results
 graph.ssm <- function(ssm, N, y, title){
   fitted <- lower <- upper <- numeric()
-  n.years <- lengthy(y)
+  n.years <- length(y)
   for (i in 1:n.years){
-    fitted[i] <- mean(ssm$sims.list$N.est[,i])
-    lower[i] <- quantile(ssm$sims.list$N.est[,i], 0.025)
-    upper[i] <- quantile(ssm$sims.list$N.est[,i], 0.975)
+    fitted[i] <- mean(ssm$BUGSoutput$sims.list$N.est[,i])
+    lower[i] <- quantile(ssm$BUGSoutput$sims.list$N.est[,i], 0.025)
+    upper[i] <- quantile(ssm$BUGSoutput$sims.list$N.est[,i], 0.975)
   }
   m1 <- min(c(y, fitted, N, lower))
   m2 <- max(c(y, fitted, N, upper))
@@ -94,10 +94,10 @@ graph.ssm <- function(ssm, N, y, title){
   axis(1, at= seq(0, n.years, 5), labels= seq(0, n.years, 5))
   axis(1, at= 0:n.years, label= rep("", n.years+1), tcl= -0.25)
   polygon(x= c(1:n.years, n.years:1), y= c(lower, upper[n.years:1]), col= "gray90", border= "gray90")
-  points(N, type= "l", col= "red", lwd= 2)
-  points(y, type= "l", col= "black", lwd= 2)
-  points(fitted, type= "l", col= "blue", lwd= 2)
-  legend(x= 1, y= m2, legend= c("True", "Observed", "Estimated"), lty= c(1, 1, 1), lwd= c(2, 2, 2), col= c("red", "black", "blue"), bty= "n", cex= 1)
+  points(N, type= "l", col= "red", lwd= 2) #plotting true population size
+  points(y, type= "l", col= "black", lwd= 2) #plotting observed counts
+  points(fitted, type= "l", col= "blue", lwd= 2) #plotting estimated population size
+  legend("topleft", legend= c("True", "Observed", "Estimated"), lty= c(1, 1, 1), lwd= c(2, 2, 2), col= c("red", "black", "blue"), bty= "n", cex= 1)
 }
 graph.ssm(ssm, N, y, "Figure 5.3") #Execute function: Produce Figure
 #-------------------------------------------------------------------------------
@@ -115,11 +115,11 @@ y <- numeric(n.years)
 for(t in 1:n.years){
   y[t] <- rbinom(1, N[t], p)
 }
-y #observed counts are smaller than the true population size
+y #observed counts are smaller than the true population size, and counts vary despite true population size and detection probability remaining constant
 
 #Analyze the model
 jags.data <- list(y= y, T= n.years) #Bundle data
-inits <- function(){list(sigma.proc= runif(1, 0, 5), mean.lambda= runif(1, 0.1, 2), sigma.obs= runif(1, 0, 10), N.est= c(runif(1, 30, 60), rep(NA, (nyears-1))))} #initial values
+inits <- function(){list(sigma.proc= runif(1, 0, 5), mean.lambda= runif(1, 0.1, 2), sigma.obs= runif(1, 0, 10), N.est= c(runif(1, 30, 60), rep(NA, (n.years-1))))} #initial values
 params <- c("lambda", "mean.lambda", "sigma2.obs", "sigma2.proc", "N.est") #parameters monitored
 
 #MCMC settings
@@ -178,7 +178,7 @@ k<-mcmcplots::as.mcmc.rjags(ssm)%>%as.shinystan()%>%launch_shinystan() #making i
 #Produce Figure 5.5
 graph.ssm(ssm, N, y, "Figure 5.5")
 points(N*p, col= "black", type= "l", lwd= 2, lty= 2)
-legend(x= 1, y= 45.5, legend= "Np", lwd= 2, col= "black", lty= 2, bty= "n")
+legend(x= -0.5, y= 55.5, legend= "Np", lwd= 2, col= "black", lty= 2, bty= "n")
 #-------------------------------------------------------------------------------
 
 # 5.4 Real Example: House Martin Population Counts in the Village of Magden
@@ -212,13 +212,13 @@ jags.model.txt <- function(){
 }
 
 #House Martin Population Data from Magden
-pyears <- 6 #Number of future years with predictions
-hm <- c(271, 261, 309, 318, 231, 216, 208, 226, 195, 226, 233, 209, 226, 192, 191, 225, 245, 205, 191, 174, rep(NA, pyears))
+pyears <- 6 #Number of future years with predictions (to get us to 2015)
+hm <- c(271, 261, 309, 318, 231, 216, 208, 226, 195, 226, 233, 209, 226, 192, 191, 225, 245, 205, 191, 174, rep(NA, pyears)) #number of observed breeding pairs with NAs to support prediction into future years
 year <- 1990:(2009+pyears)
 
 #Analyze the model
 jags.data <- list(y= log(hm), T= length(year)) #Bundle data
-inits <- function(){list(sigma.proc= runif(1, 0, 1), mean.lambda= rnorm(1), sigma.obs= runif(1, 0, 1), logN.est= c(runif(1, 5.6, 0.1), rep(NA, length(year)-1)))} #initial values
+inits <- function(){list(sigma.proc= runif(1, 0, 1), mean.r= rnorm(1), sigma.obs= runif(1, 0, 1), logN.est= c(rnorm(1, 5.6, 0.1), rep(NA, length(year)-1)))} #initial values
 params <- c("r", "mean.r", "sigma2.obs", "sigma2.proc", "N.est") #parameters monitored
 
 #MCMC settings
@@ -246,8 +246,8 @@ fitted <- lower <- upper <- numeric()
 year <- 1990:2015
 n.years <- length(hm)
 for (i in 1:n.years){
-  fitted[i] <- mean(hm.smm$sims.list$N.est[,i], 0.025)
-  lower[i] <- quantile(hm.ssm$sims.list$N.est[,i], 0.975)
+  fitted[i] <- mean(hm.ssm$BUGSoutput$sims.list$N.est[,i], 0.025)
+  lower[i] <- quantile(hm.ssm$BUGSoutput$sims.list$N.est[,i], 0.975)
 }
 m1 <- min(c(fitted, hm, lower), na.rm= T)
 m2 <- max(c(fitted, hm, upper), na.rm= T)
@@ -258,8 +258,8 @@ axis(1, at= 1:n.years, labels= year)
 polygon(x= c(1:n.years, n.years:1), y= c(lower, upper[n.years:1]), col= "gray90", border= "gray90")
 points(hm, type= "l", col= "black", lwd= 2)
 points(fitted, type= "l", col= "blue", lwd= 2)
-legend(x= 1, y= 150, legend= c("Counts", "Estimates"), lty= c(1,1), lwd= c(2,2), col= c("black", "blue"), bty= "n", cex= 1)
+legend("bottomleft", legend= c("Counts", "Estimates"), lty= c(1,1), lwd= c(2,2), col= c("black", "blue"), bty= "n", cex= 1)
 
 #Probability of N(2015) < N(2009)
-mean(hm.ssm$sims.list$N.est[,26] < hm.ssm$mean$N.est[20])
+mean(hm.ssm$BUGSoutput$sims.list$N.est[,26] < hm.ssm$BUGSoutput$mean$N.est[20])
 #-------------------------------------------------------------------------------
