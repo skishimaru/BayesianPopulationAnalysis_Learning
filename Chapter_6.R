@@ -5,7 +5,9 @@ library(R2jags) #to run JAGS
 library(shinystan) #to run shiny stan
 library(tidyverse) #to utilize pipe operators
 
-#NOTE: All example models in this chapter assume closure, which means each species is part of the sampled community at a given point and must be available for detection during all replicate surveys
+#NOTE: All example models in this chapter assume the population is closed which means... 
+#1. Each species is part of the sampled community at a given point and must be available for detection during all replicate surveys
+#2. No recruitment, mortality, and dispersal occur, therefore no numerical changes occur
 
 # 6.2 Generation and Analysis of Simulated Data with Data Augmentation
 # 6.2.1 Introduction to Data Augmentation for the Simplest Case: Model M0
@@ -27,7 +29,7 @@ data.fn <- function(N= 100, p= 0.5, T= 3){
   return(list(N=N, p= p, C= C, T= T, yfull= yfull, yobs= yobs))
 }
 
-data <- data.fn()
+data <- data.fn() #create data set
 
 str(data) #shows us the list of R objects
 #yfull= full capture history matrix of all N animals, including those which were never captured and have an all zero capture history
@@ -62,7 +64,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   N <- sum(z[])
 }
 
-jags.data <- list(yaug= yaug, M= row(yaug), T= ncol(yaug)) #Bundle data
+jags.data <- list(yaug= yaug, M= nrow(yaug), T= ncol(yaug)) #Bundle data
 inits <- function() list(z= rep(1, nrow(yaug)), p= runif(1, 0, 1)) #Initial Values
 params <- c("N", "p", "omega") #Parameters monitored
 
@@ -84,8 +86,8 @@ out <- jags(data  = jags.data,
 
 print(out, dig = 3) #summarize Posteriors
 
-hist(out$BUGSoutput$sims.list$deviance, nclass= 50, col= "gray", main= "Figure 6.1", xlab= "Population size", las= 1, xlim= c(80,150))
-abline(v= data$C, lwd= 3)
+hist(out$BUGSoutput$sims.list$N, nclass= 50, col= "gray", main= "Figure 6.1", xlab= "Population size", las= 1, xlim= c(80,150)) #Posterior distribution of population size (N)
+abline(v= data$C, lwd= 3) #black line= observed number of animals
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
@@ -105,9 +107,9 @@ out5 <- jags(data  = jags.data,
             n.burnin = nb) 
 print(out5, dig= 3)
 par(mfrow= c(3,1))
-hist(out5$BUGSoutput$sims.list$deviance, nclass= 30, col= "gray", main= "Augmentation by 5", xlab= "Population size", las= 1, xlim= c(80,140))
+hist(out5$BUGSoutput$sims.list$N, nclass= 30, col= "gray", main= "Augmentation by 5", xlab= "Population size", las= 1, xlim= c(80,140))
 abline(v= data$C, col= "black", lwd= 5)
-abline(v= mean(out5$BUGSoutput$sims.list$deviance), col= "blue", lwd= 3)
+abline(v= mean(out5$BUGSoutput$sims.list$N), col= "blue", lwd= 3)
 
 #2. Augment data set to 150 potential individuals
 nz <- 150
@@ -122,9 +124,9 @@ out150 <- jags(data  = jags.data,
              n.iter = ni,
              n.burnin = nb) 
 print(out150, dig= 3)
-hist(out150$BUGSoutput$sims.list$deviance, nclass= 30, col= "gray", main= "Augmentation by 150", xlab= "Population size", las= 1, xlim= c(80,140))
+hist(out150$BUGSoutput$sims.list$N, nclass= 30, col= "gray", main= "Augmentation by 150", xlab= "Population size", las= 1, xlim= c(80,140))
 abline(v= data$C, col= "black", lwd= 5)
-abline(v= mean(out150$BUGSoutput$sims.list$deviance), col= "blue", lwd= 3)
+abline(v= mean(out150$BUGSoutput$sims.list$N), col= "blue", lwd= 3)
 
 #3. Augment data set to 150 potential individuals
 nz <- 1500
@@ -139,11 +141,11 @@ out1500 <- jags(data  = jags.data,
                n.iter = ni,
                n.burnin = nb) 
 print(out1500, dig= 3)
-hist(out1500$BUGSoutput$sims.list$deviance, nclass= 30, col= "gray", main= "Augmentation by 1500", xlab= "Population size", las= 1, xlim= c(80,140))
+hist(out1500$BUGSoutput$sims.list$N, nclass= 30, col= "gray", main= "Augmentation by 1500", xlab= "Population size", las= 1, xlim= c(80,140))
 abline(v= data$C, col= "black", lwd= 5)
-abline(v= mean(out1500$BUGSoutput$sims.list$deviance), col= "blue", lwd= 3)
-mtext("Figure 6.2", side= 3, line= -2, outer= T) #adding main title to multiplot
-
+abline(v= mean(out1500$BUGSoutput$sims.list$N), col= "blue", lwd= 3)
+mtext("Figure 6.2", side= 3, line= -1.5, outer= T) #adding main title to multiplot, black lines= observed number of animals, blue lines= posterior means
+dev.off() #done with multiplot
 #This exercise shows that data augmentation does not have an effect on estimates but effects efficiency. Data augmentation is more costly in terms of computation time
 #NOTE, Diagnosing not enough of data augmentation: Looks at the posterior distribution of N. If it is truncated on the right by your choice of M you need to repeat the analysis with more 0s added
 #-------------------------------------------------------------------------------
@@ -190,7 +192,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     z[i] ~ dbern(omega) #inclusion indicators
     for (j in 1:T){
       yaug[i,j] ~ dbern(p.eff[i,j])
-      p.eff[i,j] <- z[i]*p # can only be detected if z= 1
+      p.eff[i,j] <- z[i]*p[j] # can only be detected if z= 1
     }
   }
   
@@ -198,7 +200,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   N <- sum(z[])
 }
 
-jags.data <- list(yaug= yaug, M= row(yaug), T= ncol(yaug)) #Bundle data
+jags.data <- list(yaug= yaug, M= nrow(yaug), T= ncol(yaug)) #Bundle data
 inits <- function() list(z= rep(1, nrow(yaug)), p= runif(data$T, 0, 1)) #Initial Values
 params <- c("N", "p", "omega") #Parameters monitored
 
@@ -220,8 +222,8 @@ out <- jags(data  = jags.data,
 
 print(out, dig = 3) #summarize Posteriors
 
-hist(out$BUGSoutput$sims.list$deviance, nclass= 50, col= "gray", main= "", xlab= "Population size", las= 1, xlim= c(80,150))
-abline(v= data$C, lwd= 3)
+hist(out$BUGSoutput$sims.list$N, nclass= 50, col= "gray", main= "", xlab= "Population size", las= 1, xlim= c(80,150))
+abline(v= data$C, col= "black", lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
@@ -246,7 +248,7 @@ data.fn <- function(N= 200, T= 5, p= 0.3, c= 0.4){
   C <- sum(ever.detected)
   yobs <- yfull[ever.detected== 1,]
   cat(C, "out of", N, "animals present were detected.")
-  return(list(N= N, p= p, C= C, T= T, yfull= yfull, yobs= yobs))
+  return(list(N= N, p= p, c= c, C= C, T= T, yfull= yfull, yobs= yobs))
 }
 
 data <- data.fn(N= 200) #Created a data set with trap happiness (p<c)
@@ -281,9 +283,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   trap.response <- c - p
 }
 
-jags.data <- list(yaug= yaug, M= row(yaug), T= ncol(yaug)) #Bundle data
+jags.data <- list(yaug= yaug, M= nrow(yaug), T= ncol(yaug)) #Bundle data
 inits <- function() list(z= rep(1, nrow(yaug)), p= runif(1, 0, 1)) #Initial Values
-params <- c("N", "p", "C", "trap.response", "omega") #Parameters monitored
+params <- c("N", "p", "c", "trap.response", "omega") #Parameters monitored
 
 #MCMC Settings
 ni <- 2500
@@ -303,7 +305,7 @@ out <- jags(data  = jags.data,
 
 print(out, dig = 3) #summarize Posteriors
 
-hist(out$BUGSoutput$sims.list$deviance, nclass= 50, col= "gray", main= "", xlab= "Population size", las= 1, xlim= c(80,150))
+hist(out$BUGSoutput$sims.list$N, nclass= 40, col= "gray", main= "", xlab= "Population size", las= 1, xlim= c(150,300))
 abline(v= data$C, lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
@@ -330,7 +332,7 @@ data.fn <- function(N= 100, mean.p= 0.4, T= 5, sd= 1){
   cat(C, "out of", N, "animals present were detected.")
   hist(p.vec, xlim= c(0,1), nclass= 20, col= "gray", main= "Figure 6.3", xlab= "Detection Probability", las= 1)
   return(list(N= N, p.vec= p.vec, mean.lp= mean.lp, C= C, T= T, yfull= yfull, yobs= yobs))
-}
+} #Figure 6.3: Distribution of individual detection probability for 100 simulated individuals
 
 data <- data.fn() #Created a data set with trap happiness (p<c)
 
@@ -354,9 +356,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
     logit(p[i]) <- eps[i]
-    eps[i] ~ dnorm(mean.lp, tau) I(-16,16) #I() changes the class of an object to be treated "as is", inhibit interpretation
+    eps[i] ~ T(dnorm(mean.lp, tau),-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
     p.eff[i] <- z[i]*p[i]
-    y[i] ~dbin(p.eff[i], T)
+    y[i] ~ dbin(p.eff[i], T)
   }
   #Derived Quantities 
   N <- sum(z[])
@@ -384,8 +386,8 @@ out <- jags(data  = jags.data,
 
 print(out, dig = 3) #summarize Posteriors
 
-hist(out$BUGSoutput$sims.list$deviance, nclass= 50, col= "gray", main= "Figure 6.4", xlab= "Population size", las= 1, xlim= c(80,250))
-abline(v= data$C, lwd= 3)
+hist(out$BUGSoutput$sims.list$N, nclass= 50, col= "gray", main= "Figure 6.4", xlab= "Population size", las= 1, xlim= c(80,250))
+abline(v= data$C, col= "black", lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #We see that precision for N is lower compared to other models. Estimation in individual effects models tend to be more challenging than models without random effects and we need to run them for a longer time to get an adequate posterior sample.
