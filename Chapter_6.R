@@ -348,7 +348,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors
   omega ~ dunif(0,1)
   mean.lp <- logit(mean.p)
-  mean.p <- dunif(0,1)
+  mean.p ~ dunif(0,1)
   tau <- 1/(sd*sd)
   sd ~ dunif(0,5)
   
@@ -356,7 +356,11 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
     logit(p[i]) <- eps[i]
-    eps[i] ~ T(dnorm(mean.lp, tau),-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
+    eps[i] ~ dnorm(mean.lp, tau) I(-16,16)#dnorm(mean, precision) where precision = tau = 1/(sd)^2
+    #eps[i] ~ dtruncnorm(mean.lp, a= -16, b= 16, tau)
+    #eps[i] ~ dist_truncated(dnorm(mean.lp, tau),-16,16)
+    #eps[i] ~ T(dnorm(mean.lp, tau),-16,16) 
+    #eps[i] ~ dnorm(mean.lp, tau) T(-16,16) 
     p.eff[i] <- z[i]*p[i]
     y[i] ~ dbin(p.eff[i], T)
   }
@@ -364,7 +368,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   N <- sum(z[])
 }
 
-jags.data <- list(yaug= yaug, M= length(yaug), T= ncol(data$yobs)) #Bundle data
+jags.data <- list(y= yaug, M= length(yaug), T= ncol(data$yobs)) #Bundle data
 inits <- function() list(z= rep(1, length(yaug)), sd= runif(1, 0.1, 0.9)) #Initial Values
 params <- c("N", "mean.p", "sd", "omega") #Parameters monitored
 
@@ -412,9 +416,9 @@ data.fn <- function(N= 100, T= 5, mean.p= 0.4, time.effects= runif(T, -1, 1), sd
   cat(C, "out of", N, "animals present were detected.")
   cat("Mean p per occasion:", round(apply(p, 2, mean), 2), "\n")
   par(mfrow= c(2,1))
-  plot(plogis(mean.lp + time.effects), xlab= "Occasion", type= "b", main= "Approximate m=Mean p at Each Occasion", ylim= c(0,1))
+  plot(plogis(mean.lp + time.effects), xlab= "Occasion", type= "b", main= "Approximate m= Mean p at Each Occasion", ylim= c(0,1))
   hist(plogis(mean.lp + eps), xlim= c(0,1), col= "gray", main= "Approximate Distribution of p at Average Occasion")
-  return(list(N= N, mean.lp= mean.lp, time.effects= time.effects, C= C, T= T, yfull= yfull, yobs= yobs))
+  return(list(N= N, mean.lp= mean.lp, time.effects= time.effects, sd= sd, eps= eps, C= C, T= T, yfull= yfull, yobs= yobs))
 }
 
 data <- data.fn() #Created a data set with trap happiness (p<c)
@@ -439,7 +443,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    eps[i] ~ dnorm(0, tau) I(-16,16) #I() changes the class of an object to be treated "as is", inhibit interpretation
+    eps[i] ~ dnorm(0, tau) I(-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
     for (j in 1:T){
       lp[i,j] <- mean.lp[j] + eps[i]
       p[i,j] <- 1/(1 + exp(-lp[i,j])) #Define logit
@@ -451,8 +455,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   N <- sum(z[])
 }
 
-jags.data <- list(yaug= yaug, M= nrow(yaug), T= ncol(yaug)) #Bundle data
-inits <- function() list(z= rep(1, length(yaug)), sd= runif(1, 0.1, 0.9)) #Initial Values
+jags.data <- list(y= yaug, M= nrow(yaug), T= ncol(yaug)) #Bundle data
+inits <- function() list(z= rep(1, nrow(yaug)), sd= runif(1, 0.1, 0.9)) #Initial Values
 params <- c("N", "mean.p", "mean.lp", "sd", "omega") #Parameters monitored
 
 #MCMC Settings
@@ -510,7 +514,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    eps[i] ~ dnorm(0, tau) I(-16,16) #I() changes the class of an object to be treated "as is", inhibit interpretation
+    eps[i] ~ dnorm(0, tau) I(-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
     #First occasion: no term for recapture (gamma)
     y[i,1] ~ dbern(p.eff[i,1])
     p.eff[i,1] <- z[i]*p[i,1]
@@ -644,7 +648,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    size[i] ~ dnorm(mu.size, tau.size) I(-6,6)
+    size[i] ~ dnorm(mu.size, tau) I(-6,6) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
     for (j in 1:T){
       y[i,j] ~ dbern(p.eff[i,j])
       p.eff[i,j] <- z[i]*p[i,j]
