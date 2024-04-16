@@ -356,11 +356,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
     logit(p[i]) <- eps[i]
-    eps[i] ~ dnorm(mean.lp, tau) I(-16,16)#dnorm(mean, precision) where precision = tau = 1/(sd)^2
-    #eps[i] ~ dtruncnorm(mean.lp, a= -16, b= 16, tau)
-    #eps[i] ~ dist_truncated(dnorm(mean.lp, tau),-16,16)
-    #eps[i] ~ T(dnorm(mean.lp, tau),-16,16) 
-    #eps[i] ~ dnorm(mean.lp, tau) T(-16,16) 
+    eps[i] ~ dnorm(mean.lp, tau); T(-16,16)#dnorm(mean, precision) where precision = tau = 1/(sd)^2
     p.eff[i] <- z[i]*p[i]
     y[i] ~ dbin(p.eff[i], T)
   }
@@ -416,7 +412,7 @@ data.fn <- function(N= 100, T= 5, mean.p= 0.4, time.effects= runif(T, -1, 1), sd
   cat(C, "out of", N, "animals present were detected.")
   cat("Mean p per occasion:", round(apply(p, 2, mean), 2), "\n")
   par(mfrow= c(2,1))
-  plot(plogis(mean.lp + time.effects), xlab= "Occasion", type= "b", main= "Approximate m= Mean p at Each Occasion", ylim= c(0,1))
+  plot(plogis(mean.lp + time.effects), xlab= "Occasion", type= "b", main= "Approximate Mean p at Each Occasion", ylim= c(0,1))
   hist(plogis(mean.lp + eps), xlim= c(0,1), col= "gray", main= "Approximate Distribution of p at Average Occasion")
   return(list(N= N, mean.lp= mean.lp, time.effects= time.effects, sd= sd, eps= eps, C= C, T= T, yfull= yfull, yobs= yobs))
 }
@@ -443,7 +439,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    eps[i] ~ dnorm(0, tau) I(-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
+    eps[i] ~ dnorm(0, tau); T(-16,16)
     for (j in 1:T){
       lp[i,j] <- mean.lp[j] + eps[i]
       p[i,j] <- 1/(1 + exp(-lp[i,j])) #Define logit
@@ -477,7 +473,7 @@ out <- jags(data  = jags.data,
 
 print(out, dig = 3) #summarize Posteriors
 
-hist(out$BUGSoutput$sims.list$deviance, nclass= 50, col= "gray", main= "Figure 6.5", xlab= "Population size", las= 1, xlim= c(80,200))
+hist(out$BUGSoutput$sims.list$N, nclass= 50, col= "gray", main= "Figure 6.5", xlab= "Population size", las= 1, xlim= c(80,200))
 abline(v= data$C, lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
@@ -490,11 +486,11 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 #Analysis is reduced to simple detection/nondetection data
 
 #Read in data
-p610 <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/p610.csv", header= TRUE)
+p610 <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/p610.txt", header= TRUE)
 y <- p610[,5:9] #grab counts
 y[y > 1] <- 1 #counts to det-nondetections
 C <- sum(apply(y, 1, max)) ; print(C) #number of observed species
-table(apple(y, 1, sum)) #capture frequencies
+table(apply(y, 1, sum)) #capture frequencies
 #NOTE: This data contains detection history of the 31 species detected at that particular point, but also all species detected anywhere along the entire transect. So the data is naturally augmented. We will not add additional zeros because 115 zeros corresponding to species not detected at point 610 but somewhere else in the transect is enough.
 
 #Example that shows the additive fixed effect of time, behavior, and random (logistic normal) effects of individuals
@@ -514,7 +510,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    eps[i] ~ dnorm(0, tau) I(-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
+    eps[i] ~ dnorm(0, tau); T(-16,16) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
     #First occasion: no term for recapture (gamma)
     y[i,1] ~ dbern(p.eff[i,1])
     p.eff[i,1] <- z[i]*p[i,1]
@@ -557,7 +553,7 @@ print(out, dig = 3) #summarize Posteriors
 #For a short survey this outcome is reasonable because average detection of a species community ranges from 0.22 - 0.32
 
 par(mfrow= c(1,2))
-hist(out$BUGSoutput$sims.list$deviance, nclass= 35, col= "gray", main= "Figure 6.7", xlab= "Community Size", las= 1, xlim= c(30,100), freq= FALSE)
+hist(out$BUGSoutput$sims.list$N, nclass= 35, col= "gray", main= "Figure 6.7", xlab= "Community Size", las= 1, xlim= c(30,100), freq= FALSE)
 abline(v= C, col= "black", lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
@@ -611,11 +607,11 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 # 6.4.1 Individual Covariate Model for Species Richness Estimation
 #-------------------------------------------------------------------------------
 #Read in data
-p610 <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/p610.csv", header= TRUE)
+p610 <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/p610.txt", header= TRUE)
 y <- p610[,5:9] #grab counts
 y[y > 1] <- 1 #counts to det-nondetections
 ever.observed <- apply(y, 1, max)
-wt <- p610$bm[ever.obsessed== 1] #body mass
+wt <- p610$bm[ever.observed== 1] #body mass
 yy <- as.matrix(y[ever.observed== 1,]) #detection histories
 dimnames(yy) <- NULL
 
@@ -648,7 +644,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:M){
     z[i] ~ dbern(omega) #inclusion indicators
-    size[i] ~ dnorm(mu.size, tau) I(-6,6) #Alternate syntax: dnorm(mean.lp, tau) T(-16,16)
+    size[i] ~ dnorm(mu.size, tau.size); T(-6,6)
     for (j in 1:T){
       y[i,j] ~ dbern(p.eff[i,j])
       p.eff[i,j] <- z[i]*p[i,j]
@@ -660,7 +656,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   N <- sum(z[])
 }
 
-jags.data <- list(y= yaug, size= logwt3 - mean(logwt3, na.rm= TRUE), M= nrow(yaug), prior.sd.upper= 3) #Bundle data
+jags.data <- list(y= yaug, size= logwt3 - mean(logwt3, na.rm= TRUE), M= nrow(yaug), T= ncol(yaug), prior.sd.upper= 3) #Bundle data
 inits <- function() list(z= rep(1, nrow(yaug)), beta= runif(1, 0, 1), mu.size= rnorm(1, 0, 1)) #Initial Values
 params <- c("N", "mean.p", "beta", "omega", "mu.size", "sd.size") #Parameters monitored
 
@@ -684,7 +680,7 @@ print(outX, dig = 3) #summarize Posteriors
 #in this model we detected 31 species and estimate there was 42 species, so only 74% were detected
 #For a short survey this outcome is reasonable because average detection of a species community ranges from 0.22 - 0.32
 
-hist(outX$BUGSoutput$sims.list$deviance, breaks= 100, col= "gray", main= "", xlab= "Community Size", las= 1, xlim= c(30,100), freq= FALSE)
+hist(outX$BUGSoutput$sims.list$N, breaks= 100, col= "gray", main= "", xlab= "Community Size", las= 1, xlim= c(30,100), freq= FALSE)
 abline(v= 31, col= "black", lwd= 3)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
@@ -699,7 +695,7 @@ plot(pred.wt, pred.p, type= "l", lwd= 3, col= "blue", las= 1, frame.plot= FALSE,
 
 # 6.4.2 Individual Covariate Model for Population Size Estimation
 #-------------------------------------------------------------------------------
-pinna <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/p610.csv", header= TRUE)
+pinna <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/pinna.txt", header= TRUE)
 y <- cbind(pinna$d1, pinna$d2)
 size <- pinna$width
 hist(size, col= "gray", nclass= 50, xlim= c(0,30), freq= FALSE)
@@ -710,7 +706,37 @@ nz= 150
 yaug <- rbind(y, array(0, dim= c(nz, ncol(y))))
 size <- c(size, rep(NA, nz))
 
-#MCMC Settings
+jags.data <- list(y= yaug, size= size - mean(size, na.rm= TRUE), M= nrow(yaug), T= ncol(yaug), prior.sd.upper= 5)
+
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors
+  omega ~ dunif(0,1)
+  for (j in 1:T){
+    alpha[j] <- log(mean.p[j]/(1 - mean.p[j])) #Define logit
+    mean.p[j] ~ dunif(0,1) #Detect intercepts
+  }
+  beta ~ dnorm(0, 0.01)
+  mu.size ~ dnorm(0, 0.01)
+  tau.size <- 1/(sd.size*sd.size)
+  sd.size ~ dunif(0,prior.sd.upper) #provide upper bound as data
+  
+  #Likelihood
+  for (i in 1:M){
+    z[i] ~ dbern(omega) #inclusion indicators
+    size[i] ~ dnorm(mu.size, tau.size)
+    for (j in 1:T){
+      y[i,j] ~ dbern(p.eff[i,j])
+      p.eff[i,j] <- z[i]*p[i,j]
+      p[i,j] <- 1/(1 + exp(-lp[i,j])) #Define logit
+      lp[i,j] <- alpha[j] + beta * size[i]
+    }
+  }
+  #Derived Quantities 
+  N <- sum(z[])
+}
+
+#MCMC setting
 ni <- 2500
 nt <- 2
 nb <- 500
@@ -734,7 +760,7 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 
 #Plot posterior for N and prediction of p
 par(mfrow= c(1,2), mar= c(4.5, 4, 2, 1))
-hist(outXX$BUGSoutput$sims.list$deviance, breaks= 30, col= "gray", main= "Figure 6.9", xlab= "Population size", las= 1, xlim= c(143, 220), freq= FALSE)
+hist(outXX$BUGSoutput$sims.list$N, breaks= 30, col= "gray", main= "Figure 6.9", xlab= "Population size", las= 1, xlim= c(143, 220), freq= FALSE)
 abline(v= 143, col= "black", lwd= 3)
 pred.size <- seq(0, 30, length.out= 1000) #cov. vals for prediction
 pred.size.st <- pred.size - mean(size,na.rm= TRUE) #Transform them
