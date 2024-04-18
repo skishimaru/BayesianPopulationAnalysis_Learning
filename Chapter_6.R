@@ -600,7 +600,7 @@ out0 <- jags(data  = jags.data,
 print(out0, dig = 3) #summarize Posteriors
 #Under this model we estimated 38 instead of 42 species. This illustrates that ignoring individual heterogeneity in detection probability produces underestimates of and too short standard errors for population size (N)
 
-k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+k<-mcmcplots::as.mcmc.rjags(out0)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
 
 # 6.4 Capture-Recapture Models with Individual Covariables: Model Mt+x
@@ -683,7 +683,7 @@ print(outX, dig = 3) #summarize Posteriors
 hist(outX$BUGSoutput$sims.list$N, breaks= 100, col= "gray", main= "", xlab= "Community Size", las= 1, xlim= c(30,100), freq= FALSE)
 abline(v= 31, col= "black", lwd= 3)
 
-k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+k<-mcmcplots::as.mcmc.rjags(outX)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 pred.wt <- seq(5, 2000, length.out= 100) #cov. vals for prediction
 pred.wt.st <- log(pred.wt^(1/3))-mean(logwt3, na.rm= TRUE)
@@ -756,7 +756,7 @@ print(outXX, dig = 2) #summarize Posteriors
 #in this model we estimate that 172 instead of 143 pen shells were available for detection along the survey transects, so 29 were missed by both teams of divers
 #detection probability was higher for the first team as expected, and there was a positive relationship with shell width
 
-k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+k<-mcmcplots::as.mcmc.rjags(outXX)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Plot posterior for N and prediction of p
 par(mfrow= c(1,2), mar= c(4.5, 4, 2, 1))
