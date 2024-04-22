@@ -909,7 +909,7 @@ for (i in 1:dim(CH.A)[1]){
   } 
 } 
 
-#Combind data sets
+#Combined data sets
 CH <- rbind(CH.J, CH.A)
 f <- c(f.j, f.a)
 x <- rbind(x.j, x.a)
@@ -998,31 +998,606 @@ mean.p ~ dunif(0, 1) #Prior for mean recapture
 
 # 7.8 Immediate Trap Response in Recapture Probability
 #-------------------------------------------------------------------------------
+#Import data
+CH <- as.matrix(read.table(file= "/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/trap.txt", sep= " "))
 
+#Compute vector with occasion of first capture
+get.first <- function(x) min(which(x!=0))
+f<- apply(CH, 1, get.first)
+
+#Create matrix m indication when an individual was captured 
+m <- CH[,1:(dim(CH)[2]-1)]
+u <- which(m==0)
+m[u] <- 2
+#in matrix: 1 denotes an individual was captured at the preceding occasion and 2 denotes that it was not captured at the preceding location
+
+#Specify model in JAGS language 
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors and Constraints
+  for (i in 1:nind) {
+    for (t in f[i]:(n.occasions-1)) {
+      phi[i,t] <- mean.phi
+      p[i,t] <- beta[m[i,t]]
+    }
+  }
+  mean.phi ~ dunif(0,1) #Prior for mean survival
+  for (u in 1:2) {
+    beta[u] ~ dunif(0,1) #Prior for recapture
+  }
+  
+  #Likelihood
+  for (i in 1:nind){
+    # Define latent state at first capture
+    z[i,f[i]] <- 1
+    for (t in (f[i]+1):n.occasions){
+      # State process
+      z[i,t] ~ dbern(mu1[i,t])
+      mu1[i,t] <- phi[i,t-1] * z[i,t-1]
+      # Observation process
+      y[i,t] ~ dbern(mu2[i,t])
+      mu2[i,t] <- p[i,t-1] * z[i,t]
+    } 
+  } 
+}
+
+#Bundle data
+bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH), m = m)
+
+#Initial values
+inits <- function(){list(z = cjs.init.z(CH, f), mean.phi = runif(1, 0, 1), beta = runif(2, 0, 1))}
+
+#Parameters monitored
+parameters <- c("mean.phi", "beta")
+
+#MCMC settings
+ni <- 20000
+nt <- 3
+nb <- 10000
+nc <- 3
+
+#Call JAGS from R
+cjs.trap <- jags(data  = jags.data,
+                inits = inits,
+                parameters.to.save = params,
+                model.file = jags.model.txt,
+                n.chains = nc,
+                n.thin= nt,
+                n.iter = ni,
+                n.burnin = nb)
+
+print(cjs.trap, dig = 3) #summarize Posteriors
+
+k<-mcmcplots::as.mcmc.rjags(cjs.trap)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
 
 # 7.9 Parameter Identifiable
 #-------------------------------------------------------------------------------
+# Define parameter values
+n.occasions <- 12 #Number of capture occasions
+marked <- rep(30, n.occasions-1) #Annual number of newly marked individuals
+phi <- c(0.6, 0.5, 0.55, 0.6, 0.5, 0.4, 0.6, 0.5, 0.55, 0.6, 0.7)
+p <- c(0.4, 0.65, 0.4, 0.45, 0.55, 0.68, 0.66, 0.28, 0.55, 0.45, 0.35)
 
+#Define matrices with survival and recapture probabilities
+PHI <- matrix(phi, ncol = n.occasions-1, nrow = sum(marked), byrow = TRUE)
+P <- matrix(p, ncol = n.occasions-1, nrow = sum(marked), byrow = TRUE)
+
+#Simulate capture-histories
+CH <- simul.cjs(PHI, P, marked)
+
+# Create vector with occasion of marking
+get.first <- function(x) min(which(x!=0))
+f <- apply(CH, 1, get.first)
+
+#Specify model in JAGS language 
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors and Constraints
+  for (i in 1:nind) {
+    for (t in f[i]:(n.occasions-1)) {
+      phi[i,t] <- phi.t[t]
+      p[i,t] <- p.t[t]
+    }
+  }
+  for (t in 1:(n.occasions-1)) {
+    phi.t[t] ~ dunif(0,1) #Prior for the time specific survival
+    p.t[t] ~ dunif(0,1) #prior for time specific recapture
+  }
+  
+  #Likelihood
+  for (i in 1:nind){
+    # Define latent state at first capture
+    z[i,f[i]] <- 1
+    for (t in (f[i]+1):n.occasions){
+      # State process
+      z[i,t] ~ dbern(mu1[i,t])
+      mu1[i,t] <- phi[i,t-1] * z[i,t-1]
+      # Observation process
+      y[i,t] ~ dbern(mu2[i,t])
+      mu2[i,t] <- p[i,t-1] * z[i,t]
+    } 
+  } 
+}
+
+#Bundle data
+bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH))
+
+#Initial values
+inits <- function(){list(z = cjs.init.z(CH, f), phi.t = runif((dim(CH)[2]-1),0,1), p.t = runif((dim(CH)[2]-1),0,1))}
+
+#Parameters monitored
+parameters <- c("mean.phi", "beta")
+
+#MCMC settings
+ni <- 25000
+nt <- 3
+nb <- 20000
+nc <- 3
+
+#Call JAGS from R
+cjs.t.t <- jags(data  = jags.data,
+                 inits = inits,
+                 parameters.to.save = params,
+                 model.file = jags.model.txt,
+                 n.chains = nc,
+                 n.thin= nt,
+                 n.iter = ni,
+                 n.burnin = nb)
+
+print(cjs.t.t, dig = 3) #summarize Posteriors
+
+k<-mcmcplots::as.mcmc.rjags(cjs.t.t)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#Plot posterior distributions of some phi and p
+par(mfrow = c(2, 2), cex = 1.2, las = 1, mar=c(5, 4, 2, 1))
+plot(density(cjs.t.t$sims.list$phi.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
+     main = "", xlab = expression(phi[6]), ylab = "Density", frame = FALSE,
+     lwd = 2)
+abline(h = 1, lty = 2, lwd = 2)
+par(mar=c(5, 3, 2, 2))
+plot(density(cjs.t.t$sims.list$phi.t[,11]), xlim = c(0, 1),
+     ylim =c(0, 5), main = "", xlab = expression(phi[11]), ylab ="",
+     frame = FALSE, lwd = 2)
+abline(h = 1, lty = 2, lwd = 2)
+par(mar=c(5, 4, 2, 1))
+plot(density(cjs.t.t$sims.list$p.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
+     main = "", xlab = expression(p[6]), ylab = "Density", frame = FALSE,
+     lwd = 2)
+abline(h = 1, lty = 2, lwd = 2)
+par(mar=c(5, 3, 2, 2))
+plot(density(cjs.t.t$sims.list$p.t[,11]), xlim = c(0, 1), ylim =
+       c(0, 5), main = "", xlab = expression(p[11]), ylab ="", frame = FALSE,
+     lwd = 2)
+abline(h = 1, lty = 2, lwd = 2)
 #-------------------------------------------------------------------------------
 
 # 7.10 Fitting the CJS to Data in the M-Array Format: The Multinomial Likelihood
 # 7.10.1 Introduction
 #-------------------------------------------------------------------------------
-
+#Function to create a m-array based on capture-histories (CH)
+marray <- function(CH){
+  nind <- dim(CH)[1]
+  n.occasions <- dim(CH)[2]
+  m.array <- matrix(data = 0, ncol = n.occasions+1, nrow = n.occasions)
+  
+  #Calculate the number of released individuals at each time period
+  for (t in 1:n.occasions){
+    m.array[t,1] <- sum(CH[,t])
+  }
+  for (i in 1:nind){
+    pos <- which(CH[i,]!=0)
+    g <- length(pos)
+    for (z in 1:(g-1)){
+      m.array[pos[z],pos[z+1]] <- m.array[pos[z],pos[z+1]] + 1
+    } 
+  }
+  
+  #Calculate the number of individuals that is never recaptured
+  for (t in 1:n.occasions){
+    m.array[t,n.occasions+1] <- m.array[t,1] -
+      sum(m.array[t,2:n.occasions])
+  }
+  out <- m.array[1:(n.occasions-1),2:(n.occasions+1)]
+  return(out)
+}
 #-------------------------------------------------------------------------------
 
 # 7.10.2 Time-Dependent Models
 #-------------------------------------------------------------------------------
+#Specify model in JAGS language 
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors and Constraints
+  for (t in 1:(n.occasions-1)) {
+    phi.t[t] ~ dunif(0,1) #Prior for the time specific survival
+    p.t[t] ~ dunif(0,1) #prior for time specific recapture
+  }
+  
+  #Define the multimodal likelihood
+  for (t in 1:(n.occasions)) {
+    marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+  }
+  
+  #Calculate the number of birds released each year
+  for (t in 1:(n.occasions-1)){
+    r[t] <- sum(marr[t, ])
+  }
+  
+  #Define the cell probabilities of the m-array
+  #Main diagonal
+  for (t in 1:(n.occasions-1)){
+    q[t] <- 1-p[t] #Probability of non-recapture
+    pr[t,t] <- phi[t]*p[t]
+    #Above main diagonal
+    for (j in (t+1):(n.occasions-1)){
+      pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
+    } 
+    
+    #Below main diagonal
+    for (j in 1:(t-1)){
+      pr[t,j] <- 0
+    } 
+  } 
+  #Last column: probability of non-recapture
+  for (t in 1:(n.occasions-1)){
+    pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
+  } 
+  
+  #Assess model fit using Freeman-Tukey statistic
+  #Compute fit statistics for observed data
+  for (t in 1:(n.occasions-1)){
+    for (j in 1:n.occasions){
+      expmarr[t,j] <- r[t]*pr[t,j]
+      E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+    } 
+  } 
+  
+  #Generate replicate data and compute fit stats from them
+  for (t in 1:(n.occasions-1)){
+    marr.new[t,1:n.occasions] ~ dmulti(pr[t, ], r[t])
+    for (j in 1:n.occasions){
+      E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+    } 
+  } 
+  fit <- sum(E.org[,])
+  fit.new <- sum(E.new[,])
+  }
+  
+#Create the m-array from the capture-histories
+marr <- marray(CH)
 
+#Bundle data
+jags.data <- list(marr = marr, n.occasions = dim(marr)[2])
+
+#Initial values
+inits <- function(){list(phi = runif(dim(marr)[2]-1, 0, 1), p = runif(dim(marr)[2]-1, 0, 1))}
+
+# Parameters monitored
+parameters <- c("phi", "p", "fit", "fit.new")
+
+# MCMC settings
+ni <- 10000
+nt <- 3
+nb <- 5000
+nc <- 3
+
+#Call JAGS from R
+cjs <- jags(data  = jags.data,
+                inits = inits,
+                parameters.to.save = params,
+                model.file = jags.model.txt,
+                n.chains = nc,
+                n.thin= nt,
+                n.iter = ni,
+                n.burnin = nb)
+
+print(cjs, dig = 3) #summarize Posteriors
+
+k<-mcmcplots::as.mcmc.rjags(cjs)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#Evaluation of fit
+plot(cjs$sims.list$fit, cjs$sims.list$fit.new, xlab = "Discrepancy actual data", ylab = "Discrepancy replicate data", las = 1, ylim = c(5, 25), xlim = c(5, 25), bty ="n")
+abline(0, 1, col = "black", lwd = 2)
+mean(cjs$sims.list$fit.new > cjs$sims.list$fit)
+#We found that the observed and simulated data are fairly similar, so the model is adequate for the data set. Bayesian p-value= 0.75
 #-------------------------------------------------------------------------------
 
 # 7.10.3 Age-Dependent Models
 #-------------------------------------------------------------------------------
+#Define parameter values
+n.occasions <- 12 #Number of capture occasions
+marked.j <- rep(200, n.occasions-1) #Annual number of newly marked juveniles
+marked.a <- rep(30, n.occasions-1) #Annual number of newly marked adults
+phi.juv <- 0.3 #Juvenile annual survival
+phi.ad <- 0.65 #Adult annual survival
+p <- rep(0.5, n.occasions-1) # Recapture
+phi.j <- c(phi.juv, rep(phi.ad,n.occasions-2))
+phi.a <- rep(phi.ad, n.occasions-1)
 
+#Define matrices with survival and recapture probabilities
+PHI.J <- matrix(0, ncol = n.occasions-1, nrow = sum(marked.j))
+for (i in 1:(length(marked.j)-1)){
+  PHI.J[(sum(marked.j[1:i])-marked.j[i]+1):sum(marked.j[1:i]),i:(n.occasions-1)] <- matrix(rep(phi.j[1:(n.occasions-i)], marked.j[i]), ncol = n.occasions-i, byrow = TRUE)
+}
+P.J <- matrix(rep(p, n.occasions*sum(marked.j)), ncol = n.occasions-1, nrow = sum(marked.j), byrow = TRUE)
+PHI.A <- matrix(rep(phi.a, sum(marked.a)), ncol = n.occasions-1, nrow = sum(marked.a), byrow = TRUE)
+P.A <- matrix(rep(p, sum(marked.a)), ncol = n.occasions-1, nrow = sum(marked.a), byrow = TRUE)
+
+#Apply simulation function
+CH.J <- simul.cjs(PHI.J, P.J, marked.j)
+CH.A <- simul.cjs(PHI.A, P.A, marked.a)
+cap <- apply(CH.J, 1, sum)
+ind <- which(cap >= 2)
+CH.J.R <- CH.J[ind,] #Juvenile CH recaptured at least once
+CH.J.N <- CH.J[-ind,] #Juvenile CH never recaptured
+
+#Remove first capture
+first <- numeric()
+for (i in 1:dim(CH.J.R)[1]){
+  first[i] <- min(which(CH.J.R[i,]==1))
+}
+CH.J.R1 <- CH.J.R
+for (i in 1:dim(CH.J.R)[1]){
+  CH.J.R1[i,first[i]] <- 0
+}
+
+#Add grown-up juveniles to adults and create m-array
+CH.A.m <- rbind(CH.A, CH.J.R1)
+CH.A.marray <- marray(CH.A.m)
+
+#Create CH matrix for juveniles, ignoring subsequent recaptures
+second <- numeric()
+for (i in 1:dim(CH.J.R1)[1]){
+  second[i] <- min(which(CH.J.R1[i,]==1))
+}
+CH.J.R2 <- matrix(0, nrow = dim(CH.J.R)[1], ncol = dim(CH.J.R)[2])
+for (i in 1:dim(CH.J.R)[1]){
+  CH.J.R2[i,first[i]] <- 1
+  CH.J.R2[i,second[i]] <- 1
+}
+
+#Create m-array for these
+CH.J.R.marray <- marray(CH.J.R2)
+
+#The last column ought to show the number of juveniles not recaptured again and should all be zeros, since all of them are released as adults
+CH.J.R.marray[,dim(CH.J)[2]] <- 0
+
+#Create the m-array for juveniles never recaptured and add it to the previous m-array
+CH.J.N.marray <- marray(CH.J.N)
+CH.J.marray <- CH.J.R.marray + CH.J.N.marray
+
+#Specify model in JAGS language 
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors and constraints
+  for (t in 1:(n.occasions-1)){
+    phi.juv[t] <- mean.phijuv
+    phi.ad[t] <- mean.phiad
+    p[t] <- mean.p
+  }
+  mean.phijuv ~ dunif(0, 1) # Prior for mean juv. survival
+  mean.phiad ~ dunif(0, 1) # Prior for mean ad. survival
+  mean.p ~ dunif(0, 1) # Prior for mean recapture
+  
+  #Define the multinomial likelihood
+  for (t in 1:(n.occasions-1)){
+    marr.j[t,1:n.occasions] ~ dmulti(pr.j[t,], r.j[t])
+    marr.a[t,1:n.occasions] ~ dmulti(pr.a[t,], r.a[t])
+  }
+  
+  #Calculate the number of birds released each year
+  for (t in 1:(n.occasions01)){
+    r.j[t] <- sum(marr.j[t,])
+    r.a[t] <- sum(marr.a[t,])
+  }
+  
+  #Define the cell probabilities of the m-arrays
+  #Main diagonal
+  for (t in 1:(n.occasions-1)){
+    q[t] <- 1-p[t] #Probability of non-recapture
+    pr.j[t,t] <- phi.juv[t]*p[t]
+    pr.a[t,t] <- phi.ad[t]*p[t]
+    # Above main diagonal
+    for (j in (t+1):(n.occasions-1)){
+      pr.j[t,j] <- phi.juv[t]*prod(phi.ad[(t+1):j])*prod(q[t:(j-1)])*p[j]
+      pr.a[t,j] <- prod(phi.ad[t:j])*prod(q[t:(j-1)])*p[j]
+    } 
+    # Below main diagonal
+    for (j in 1:(t-1)){
+      pr.j[t,j] <- 0
+      pr.a[t,j] <- 0
+    } 
+  } 
+  # Last column: probability of non-recapture
+  for (t in 1:(n.occasions-1)){
+    pr.j[t,n.occasions] <- 1-sum(pr.j[t,1:(n.occasions-1)])
+    pr.a[t,n.occasions] <- 1-sum(pr.a[t,1:(n.occasions-1)])
+  } 
+}
+
+#Bundle data
+bugs.data <- list(marr.j = CH.J.marray, marr.a = CH.A.marray, n.occasions = dim(CH.J.marray)[2])
+
+#Initial values
+inits <- function(){list(mean.phijuv = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.p = runif(1, 0, 1))}
+
+#Parameters monitored
+parameters <- c("mean.phijuv", "mean.phiad", "mean.p")
+
+#MCMC settings
+ni <- 3000
+nt <- 3
+nb <- 1000
+nc <- 3
+
+cjs.2 <- jags(data  = jags.data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
+
+print(cjs.2, dig = 3) #summarize Posteriors
+
+k<-mcmcplots::as.mcmc.rjags(cjs.2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#Create graph
+par(mfrow = c(1, 3), las = 1)
+hist(cjs.2$sims.list$mean.phijuv, nclass = 30, col = "gray", main = "", xlab = "Juvenile survival", ylab = "Frequency")
+abline(v = phi.juv, col = "red", lwd = 2)
+hist(cjs.2$sims.list$mean.phiad, nclass = 30, col = "gray", main = "", xlab = "Adult survival", ylab = "")
+abline(v = phi.ad, col = "red", lwd = 2)
+hist(cjs.2$sims.list$mean.p, nclass = 30, col = "gray", main = "", xlab = "Recapture", ylab = "")
+abline(v = p[1], col = "red", lwd = 2)
 #-------------------------------------------------------------------------------
 
 # 7.11 Analysis of a Real Data Set: Survival of Female Leisler's Bats
 #-------------------------------------------------------------------------------
+m.leisleri <- matrix(c(4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
+                       0,5,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
+                       0,0,9,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
+                       0,0,0,10,2,0,0,0,0,0,0,0,0,0,0,0,0,0,5,
+                       0,0,0,0,10,2,1,0,0,0,0,0,0,0,0,0,0,0,6,
+                       0,0,0,0,0,15,0,0,0,0,0,0,0,0,0,0,0,0,6,
+                       0,0,0,0,0,0,11,2,0,1,0,0,0,0,0,0,0,0,19,
+                       0,0,0,0,0,0,0,12,1,1,0,0,0,0,0,0,0,0,6,
+                       0,0,0,0,0,0,0,0,13,2,0,0,0,0,0,0,0,0,4,
+                       0,0,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,0,6,
+                       0,0,0,0,0,0,0,0,0,0,13,1,0,0,0,1,0,0,8,
+                       0,0,0,0,0,0,0,0,0,0,0,15,3,1,0,0,0,0,12,
+                       0,0,0,0,0,0,0,0,0,0,0,0,12,4,0,1,0,0,7,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,19,2,0,0,0,3,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,28,1,0,0,4,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,22,7,2,21,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,2,21,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,14,18), ncol = 19, nrow = 18, byrow = TRUE)
 
+#Specify model in JAGS language 
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #Priors and constraints
+  for (t in 1:(n.occasions-1)){
+    logit(phi[t]) <- mu + epsilon[t]
+    epsilon[t] ~ dnorm(0, tau)
+    p[t] <- mean.p
+  }
+  mean.phi ~ dunif(0, 1) # Prior for mean survival
+  mu <- log(mean.phi / (1-mean.phi)) # Logit transformation
+  sigma ~ dunif(0, 5) # Prior for standard deviation
+  tau <- pow(sigma, -2)
+  sigma2 <- pow(sigma, 2)
+  # Temporal variance on real scale
+  sigma2.real <- sigma2 * pow(mean.phi, 2) * pow((1-mean.phi), 2)
+  mean.p ~ dunif(0, 1) # Prior for mean recapture
+  
+  #Define the multinomial likelihood
+  for (t in 1:(n.occasions-1)){
+    marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+  }
+  
+  #Calculate the number of birds released each year
+  for (t in 1:(n.occasions-1)){
+    r[t] <- sum(marr[t,])
+  }
+  
+  #Define the cell probabilities of the m-array:
+  #Main diagonal
+  for (t in 1:(n.occasions-1)){
+    q[t] <- 1-p[t]
+    pr[t,t] <- phi[t]*p[t]
+    #Above main diagonal
+    for (j in (t+1):(n.occasions-1)){
+      pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
+    } 
+    #Below main diagonal
+    for (j in 1:(t-1)){
+      pr[t,j]<-0
+    } 
+  } 
+  #Last column: probability of non-recapture
+  for (t in 1:(n.occasions-1)){
+    pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
+  }
+  
+  #Assess model fit using Freeman-Tukey statistic
+  #Compute fit statistics for observed data
+  for (t in 1:(n.occasions-1)){
+    for (j in 1:n.occasions){
+      expmarr[t,j] <- r[t]*pr[t,j]
+      E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+    }
+  }
+  
+  #Generate replicate data and compute fit stats from them
+  for (t in 1:(n.occasions-1)){
+    marr.new[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+    for (j in 1:n.occasions){
+      E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+    }
+  }
+  fit <- sum(E.org[,])
+  fit.new <- sum(E.new[,])
+}
+
+#Bundle data
+bugs.data <- list(marr = m.leisleri, n.occasions = dim(m.leisleri)[2])
+
+#Initial values
+inits <- function(){list(mean.phi = runif(1, 0, 1), sigma = runif(1, 0, 5), mean.p = runif(1, 0, 1))}
+
+# Parameters monitored
+parameters <- c("phi", "mean.p", "mean.phi", "sigma2", "sigma2.real", "fit", "fit.new")
+
+# MCMC settings
+ni <- 5000
+nt <- 3
+nb <- 1000
+nc <- 3
+
+leis.result <- jags(data  = jags.data,
+              inits = inits,
+              parameters.to.save = params,
+              model.file = jags.model.txt,
+              n.chains = nc,
+              n.thin= nt,
+              n.iter = ni,
+              n.burnin = nb)
+
+print(leis.result, dig = 3) #summarize Posteriors
+
+k<-mcmcplots::as.mcmc.rjags(leis.result)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+
+#Produce figure of female survival probabilities
+par(mfrow = c(1, 2), las = 1, mar=c(4, 4, 2, 2), mgp = c(3, 1, 0))
+lower <- upper <- numeric()
+T <- dim(m.leisleri)[2]-1
+for (t in 1:T){
+  lower[t] <- quantile(leis.result$sims.list$phi[,t], 0.025)
+  upper[t] <- quantile(leis.result$sims.list$phi[,t], 0.975)
+}
+plot(y = leis.result$mean$phi, x = (1:T)+0.5, type = "b", pch = 16, ylim =
+       c(0.3, 1), ylab = "Annual survival probability", xlab = "", axes = F)
+axis(1, at = seq(1,(T+1),2), labels = seq(1990,2008,2))
+axis(1, at = 1:(T+1), labels = rep("", T+1), tcl = -0.25)
+axis(2, las = 1)
+mtext("Year", 1, line = 2.25)
+segments((1:T)+0.5, lower, (1:T)+0.5, upper)
+segments(1, leis.result$mean$mean.phi, T+1, leis.result$mean$mean.phi,
+         lty = 2, col = "red", lwd = 2)
+segments(1, quantile(leis.result$sims.list$mean.phi,0.025), T+1,
+         quantile(leis.result$sims.list$mean.phi, 0.025), lty = 2, col = "red")
+segments(1, quantile(leis.result$sims.list$mean.phi, 0.975), T+1,
+         quantile(leis.result$sims.list$mean.phi, 0.975), lty = 2, col = "red")
+hist(leis.result$sims.list$sigma2.real, nclass = 45, col = "gray",
+     main = "", las = 1, xlab = "")
+mtext("Temporal variance of survival", 1, line = 2.25)
+
+#Evaluation of fit
+plot(leis.result$sims.list$fit, leis.result$sims.list$fit.new,
+     main = "", xlab = "Discrepancy actual data", ylab = "Discrepancy
+replicate data", las = 1, ylim = c(10, 35), xlim = c(10, 35), frame = FALSE)
+abline(0, 1, col = "black")
 #-------------------------------------------------------------------------------
