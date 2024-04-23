@@ -204,7 +204,7 @@ for (t in 1:n.occasions-1){
 }
 #-------------------------------------------------------------------------------
 
-# 7.4.2 Random Time Effects - EDIT!
+# 7.4.2 Random Time Effects 
 #-------------------------------------------------------------------------------
 #Define parameter values
 n.occasions <- 20 #number of capture occasions
@@ -256,7 +256,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     for (t in (f[i] + 1):n.occasions) {
       #State Process
       z[i,t] ~ dbern(mu1[i,t])
-      mu1[i,t] <- p[i, t-1]
+      mu1[i,t] <- p[i, t-1]*z[i,t-1]
       #Observation process
       y[i,t] ~ dbern(mu2[i,t])
       mu2[i,t] <- p[i, t-1]*z[i,t]
