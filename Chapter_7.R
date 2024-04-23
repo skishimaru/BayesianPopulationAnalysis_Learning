@@ -397,6 +397,7 @@ abline(v = -0.3, col = "red", lwd = 2)
 hist(cjs.ran$BUGSoutput$sims.list$sigma2, nclass = 50, col = "gray", main = "",
      xlab = expression(sigma^2), ylab = "Frequency", xlim=c(0, 3))
 abline(v = 0.2, col = "red", lwd = 2)
+mtext("Figure 7.4", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 7.5 Models with Individual Variation
@@ -605,6 +606,7 @@ hist(cjs.ind$BUGSoutput$sims.list$mean.phi, nclass= 25, col= "gray", main= "", x
 abline(v= mean.phi, col= "red", lwd= 2)
 hist(cjs.ind$BUGSoutput$sims.list$sigma2, nclass= 15, col= "gray", main="", xlab= expression(sigma^2), ylab= "Frequency", xlim= c(0,3))
 abline(v= v.ind, col= "red", lwd= 2)
+mtext("Figure 7.5", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #Posterior distributions of mean survival and of the individual variance in survival. Red= values used for the simulation
 
 #Priors and Constraints to estimate survival as a function of an individal covariate x
@@ -734,7 +736,7 @@ for (t in 1:(n.occasions-1)){
   lower.m[t] <- quantile(cjs.add$sims.list$phi.g2[,t], 0.025)
   upper.m[t] <- quantile(cjs.add$sims.list$phi.g2[,t], 0.975)
 }
-plot(x=(1:(n.occasions-1))-0.1, y = cjs.add$mean$phi.g1, type = "b", pch = 16, ylim = c(0.2, 1), ylab = "Survival probability", xlab = "Year", bty = "n", cex = 1.5, axes = FALSE)
+plot(x=(1:(n.occasions-1))-0.1, y = cjs.add$mean$phi.g1, type = "b", pch = 16, ylim = c(0.2, 1), main= "Figure 7.6", ylab = "Survival probability", xlab = "Year", bty = "n", cex = 1.5, axes = FALSE)
 axis(1, at = 1:11, labels = rep(NA,11), tcl = -0.25)
 axis(1, at = seq(2,10,2), labels = c("2","4","6","8","10"))
 axis(2, at = seq(0.2, 1, 0.1), labels = c("0.2", NA, "0.4", NA, "0.6", NA, "0.8", NA, "1.0"), las = 1)
@@ -1170,6 +1172,7 @@ plot(density(cjs.t.t$sims.list$p.t[,11]), xlim = c(0, 1), ylim =
        c(0, 5), main = "", xlab = expression(p[11]), ylab ="", frame = FALSE,
      lwd = 2)
 abline(h = 1, lty = 2, lwd = 2)
+mtext("Figure 7.9", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 7.10 Fitting the CJS to Data in the M-Array Format: The Multinomial Likelihood
@@ -1297,7 +1300,7 @@ print(cjs, dig = 3) #summarize Posteriors
 k<-mcmcplots::as.mcmc.rjags(cjs)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Evaluation of fit
-plot(cjs$sims.list$fit, cjs$sims.list$fit.new, xlab = "Discrepancy actual data", ylab = "Discrepancy replicate data", las = 1, ylim = c(5, 25), xlim = c(5, 25), bty ="n")
+plot(cjs$sims.list$fit, cjs$sims.list$fit.new, main= "Figure 7.9", xlab = "Discrepancy actual data", ylab = "Discrepancy replicate data", las = 1, ylim = c(5, 25), xlim = c(5, 25), bty ="n")
 abline(0, 1, col = "black", lwd = 2)
 mean(cjs$sims.list$fit.new > cjs$sims.list$fit)
 #We found that the observed and simulated data are fairly similar, so the model is adequate for the data set. Bayesian p-value= 0.75
@@ -1452,6 +1455,7 @@ hist(cjs.2$sims.list$mean.phiad, nclass = 30, col = "gray", main = "", xlab = "A
 abline(v = phi.ad, col = "red", lwd = 2)
 hist(cjs.2$sims.list$mean.p, nclass = 30, col = "gray", main = "", xlab = "Recapture", ylab = "")
 abline(v = p[1], col = "red", lwd = 2)
+mtext("Figure 7.10", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 7.11 Analysis of a Real Data Set: Survival of Female Leisler's Bats
@@ -1594,6 +1598,7 @@ segments(1, quantile(leis.result$sims.list$mean.phi, 0.975), T+1,
 hist(leis.result$sims.list$sigma2.real, nclass = 45, col = "gray",
      main = "", las = 1, xlab = "")
 mtext("Temporal variance of survival", 1, line = 2.25)
+mtext("Figure 7.12", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 
 #Evaluation of fit
 plot(leis.result$sims.list$fit, leis.result$sims.list$fit.new,
