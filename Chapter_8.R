@@ -258,6 +258,7 @@ abline(v = 0.8, col = "red", lwd = 2)
 hist(mr$sims.list$mean.r, nclass = 25, col = "gray", main = "", ylab =
        "", xlab = "Recovery probability")
 abline(v = 0.2, col = "red", lwd = 2)
+mtext("Figure 8.3", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 8.3.2 Age-Dependent Parameters
@@ -483,9 +484,10 @@ hist(rk.ageB$sims.list$ssub, breaks = 20, col = "gray", main = "", xlab = "Subad
 hist(rk.ageB$sims.list$sad, breaks = 20, col = "gray", main = "", xlab = "Adult survival")
 hist(rk.ageB$sims.list$rjuv, breaks = 20, col = "gray", main = "", xlab = "Juvenile recovery", xlim = c(0, 0.2))
 hist(rk.ageB$sims.list$rad, breaks = 20, col = "gray", main = "", xlab = "Adult recovery")
+mtext("Figure 8.5", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 
 #Plot comparison posterior distributions of juvenile survival under two priors
-plot(density(rk.ageA$sims.list$sjuv), ylim = c(0, 5), lwd = 2, main = "", xlab = "Juvenile survival", las = 1)
+plot(density(rk.ageA$sims.list$sjuv), ylim = c(0, 5), lwd = 2, main = "Figure 8.6", xlab = "Juvenile survival", las = 1)
 points(density(rk.ageB$sims.list$sjuv), col = "red", type = "l", lwd = 2)
 text(x = 0.5, y = 4.8, "Prior distributions", pos = 4, font = 3)
 legend(x = 0.6, y = 4.7, legend = c("U(0,1)", "beta(4.2,2.8)"), lwd = c(2, 2), col = c("black", "red"), bty = "n")
