@@ -208,7 +208,7 @@ for (t in 1:n.occasions-1){
 #-------------------------------------------------------------------------------
 #Define parameter values
 n.occasions <- 20 #number of capture occasions
-marked <- rep(30, n.occasions-1) #Annual varaince of survival
+marked <- rep(30, n.occasions-1) #Annual variance of survival
 mean.phi <- 0.65
 var.phi <- 1 #Temporal variance of survival 
 p <- rep(0.4, n.occasions-1)
@@ -217,7 +217,7 @@ p <- rep(0.4, n.occasions-1)
 logit.phi <- rnorm(n.occasions-1, qlogis(mean.phi), var.phi^0.5)
 phi <- plogis(logit.phi)
 
-#Define matrices with survival and recapture porbabilities
+#Define matrices with survival and recapture probabilities
 PHI <- matrix(phi, ncol= n.occasions-1, nrow= sum(marked), byrow= TRUE)
 P <- matrix(p, ncol= n.occasions-1, nrow= sum(marked))
 
@@ -298,7 +298,7 @@ hist(cjs.ran$BUGSoutput$sims.list$sigma2, col= "gray", nclass= 35, las= 1, xlab=
 abline(v= var.phi, col= "red", lwd= 2)
 #-------------------------------------------------------------------------------
 
-# 7.4.3 Temporal Covariates - EDIT!
+# 7.4.3 Temporal Covariates 
 #-------------------------------------------------------------------------------
 #Define parameter values
 n.occasions <- 20 # Number of capture occasions
@@ -330,8 +330,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     for (t in f[i]:(n.occasions-1)){
       logit(phi[i,t]) <- mu + beta*x[t] + epsilon[t]
       p[i,t] <- mean.p
-    } #t
-  } #i
+    } 
+  } 
   for (t in 1:(n.occasions-1)){
     epsilon[t] ~ dnorm(0, tau)
     phi.est[t] <- 1 / (1+exp(-mu-beta*x[t]-epsilon[t])) #Yearly survival
@@ -341,8 +341,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   mean.phi <- 1 / (1+exp(-mu)) #Logit transformation
   beta ~ dnorm(0, 0.001); T(-10, 10) #Prior for slope parameter
   sigma ~ dunif(0, 10) #Prior on standard deviation
-  tau <- pow(sigma, -2)
-  sigma2 <- pow(sigma, 2) #Residual temporal variance
+  tau <- 1/(sigma*sigma)
+  sigma2 <- sigma*sigma#Residual temporal variance
   mean.p ~ dunif(0, 1) #Prior for mean recapture
   
   #Likelihood
@@ -640,7 +640,7 @@ p.m <- rep(0.3, n.occasions-1)
 
 #Define matrices with survival and recapture probabilities
 PHI.F <- matrix(rep(phi.f, sum(marked)), ncol= n.occasions-1, nrow= sum(marked), byrow= TRUE)
-P.F <- matrix(rep(p.f, sum(marked)), ncol= n.occasiosn-1, nrow= sum(marked), byrow= TRUE)
+P.F <- matrix(rep(p.f, sum(marked)), ncol= n.occasions-1, nrow= sum(marked), byrow= TRUE)
 PHI.M <- matrix(rep(phi.m, sum(marked)), ncol= n.occasions-1, nrow= sum(marked), byrow= TRUE)
 P.M <- matrix(rep(p.m, sum(marked)), ncol= n.occasions-1, nrow= sum(marked), byrow= TRUE)
 
@@ -763,7 +763,7 @@ for (u in 1:g) {
 
 # 7.6.2 Fixed Group and Random Time Effects
 #-------------------------------------------------------------------------------
-#Used to estimate temporal variability of survival or recapture in each group seperately
+#Used to estimate temporal variability of survival or recapture in each group separately
 #Priors and constraints to conduct fixed group and random time effects
 for (i in 1: nind) {
   for (t in f[i]:(n.occasions-1)) {
@@ -1249,7 +1249,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (t in 1:(n.occasions-1)){
     for (j in 1:n.occasions){
       expmarr[t,j] <- r[t]*pr[t,j]
-      E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+      E.org[t,j] <- (sqrt(marr[t,j]) - sqrt(expmarr[t,j]))*(sqrt(marr[t,j]) - sqrt(expmarr[t,j]))
     } 
   } 
   
@@ -1257,7 +1257,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (t in 1:(n.occasions-1)){
     marr.new[t,1:n.occasions] ~ dmulti(pr[t, ], r[t])
     for (j in 1:n.occasions){
-      E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+      E.new[t,j] <- (sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))*(sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))
     } 
   } 
   fit <- sum(E.org[,])
@@ -1487,10 +1487,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   mean.phi ~ dunif(0, 1) # Prior for mean survival
   mu <- log(mean.phi / (1-mean.phi)) # Logit transformation
   sigma ~ dunif(0, 5) # Prior for standard deviation
-  tau <- pow(sigma, -2)
-  sigma2 <- pow(sigma, 2)
+  tau <- 1/(sigma*sigma)
+  sigma2 <- sigma*sigma
   # Temporal variance on real scale
-  sigma2.real <- sigma2 * pow(mean.phi, 2) * pow((1-mean.phi), 2)
+  sigma2.real <- sigma2 * (mean.phi*mean.phi) * ((1-mean.phi)*(1-mean.phi))
   mean.p ~ dunif(0, 1) # Prior for mean recapture
   
   #Define the multinomial likelihood
@@ -1527,7 +1527,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (t in 1:(n.occasions-1)){
     for (j in 1:n.occasions){
       expmarr[t,j] <- r[t]*pr[t,j]
-      E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+      E.org[t,j] <- (sqrt(marr[t,j]) - sqrt(expmarr[t,j]))*(sqrt(marr[t,j]) - sqrt(expmarr[t,j]))
     }
   }
   
@@ -1535,7 +1535,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (t in 1:(n.occasions-1)){
     marr.new[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
     for (j in 1:n.occasions){
-      E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j],0.5)), 2)
+      E.new[t,j] <- (sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))*(sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))
     }
   }
   fit <- sum(E.org[,])
