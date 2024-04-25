@@ -106,7 +106,7 @@ known.state.mr <- function(mr){
 }
 
 #Bundle data
-bugs.data <- list(y = MR, f = f, nind = dim(MR)[1], n.occasions = dim(MR)[2], z = known.state.mr(MR))
+jags.data <- list(y = MR, f = f, nind = dim(MR)[1], n.occasions = dim(MR)[2], z = known.state.mr(MR))
 
 #Define function to create a matrix of initial values for latent state z
 mr.init.z <- function(mr){
@@ -124,7 +124,7 @@ mr.init.z <- function(mr){
 inits <- function(){list(z = mr.init.z(MR), mean.s = runif(1, 0, 1), mean.r = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("mean.s", "mean.r")
+params <- c("mean.s", "mean.r")
 
 #MCMC settings
 ni <- 5000
@@ -173,7 +173,8 @@ marray.dead <- function(MR){
   for (i in 1:length(rec.ind)){
     d <- which(MR[rec.ind[i],(f[rec.ind[i]]+1):n.occasions]==1)
     rec[i] <- d + f[rec.ind[i]]
-    m.array[f[rec.ind[i]],rec[i]] <- m.array[f[rec.ind[i]], rec[i]] + 1
+    next_node <- m.array[f[rec.ind[i]], rec[i]] + 1 #SKI CHANGED!
+    m.array[f[rec.ind[i]],rec[i]] <- next_node #SKI CHANGED!
   }
   # Calculate the number of individuals that are never recovered
   for (t in 1:n.occasions){
@@ -222,13 +223,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(marr = marr, n.occasions = dim(marr)[2]-1)
+jags.data <- list(marr = marr, n.occasions = dim(marr)[2]-1)
 
 #Initial values
 inits <- function(){list(mean.s = runif(1, 0, 1), mean.r = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("mean.s", "mean.r")
+params <- c("mean.s", "mean.r")
 
 #MCMC settings
 ni <- 5000
@@ -363,13 +364,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(marr.j = marr.j, marr.a = marr.a, n.occasions = dim(marr.j)[2]-1)
+jags.data <- list(marr.j = marr.j, marr.a = marr.a, n.occasions = dim(marr.j)[2]-1)
 
 #Initial values
 inits <- function(){list(mean.sj = runif(1, 0, 1), mean.sa = runif(1, 0, 1), mean.rj = runif(1, 0, 1), mean.ra = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("mean.sj", "mean.rj", "mean.sa", "mean.ra")
+params <- c("mean.sj", "mean.rj", "mean.sa", "mean.ra")
 
 #MCMC settings
 ni <- 5000
@@ -434,13 +435,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(marr.j = marray.juv, marr.a = marray.ad, n.age = length(marray.juv)-1)
+jags.data <- list(marr.j = marray.juv, marr.a = marray.ad, n.age = length(marray.juv)-1)
 
 #Initial values
 inits <- function(){list(sjuv = runif(1, 0, 1), ssub = runif(1, 0, 1), sad = runif(1, 0, 1), rjuv = runif(1, 0, 1), rad = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("sjuv", "ssub", "sad", "rjuv", "rad")
+params <- c("sjuv", "ssub", "sad", "rjuv", "rad")
 
 #MCMC settings
 ni <- 30000
