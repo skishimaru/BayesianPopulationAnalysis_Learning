@@ -146,14 +146,14 @@ known.state.cjs <- function(ch) {
 jags.data <- list(y= CH, f= f, nind= dim(CH)[1], n.occasions= dim(CH)[2], z= known.state.cjs(CH))
 
 #Function to create a matrix of initial values for latent state z
-cjs.init.z <- function(ch, f) {
-  for(i in 1:dim(ch)[1]) {
+cjs.init.z <- function(ch,f){                    # initialize the state matrix.
+  for (i in 1:dim(ch)[1]){
     if (sum(ch[i,])==1) next
-    n2 <- max(which(ch[i,]==1))
+    n2 <- max(which(ch[i,]==1)) 
     ch[i,f[i]:n2] <- NA
   }
-  for (i in 1:dim(ch)[1]){
-    ch[i,f[i]] <- NA
+  for (i in 1:dim(ch)[1]){ 
+    ch[i,1:f[i]] <- NA
   }
   return(ch)
 }
@@ -391,7 +391,7 @@ k<-mcmcplots::as.mcmc.rjags(cjs.ran)%>%as.shinystan()%>%launch_shinystan() #maki
 
 #Create graph
 par(mfrow = c(1, 2), las = 1)
-hist(cjs.cov.ran$BUGSoutput$sims.list$beta, nclass = 25, col = "gray", main = "",
+hist(cjs.ran$BUGSoutput$sims.list$beta, nclass = 25, col = "gray", main = "",
      xlab = expression(beta), ylab = "Frequency")
 abline(v = -0.3, col = "red", lwd = 2)
 hist(cjs.ran$BUGSoutput$sims.list$sigma2, nclass = 50, col = "gray", main = "",
@@ -454,7 +454,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
       z[i,t] ~ dbern(mu1[i,t])
       mu1[i,t] <- phi[i,t-1]*z[i,t-1]
       #Observation process
-      y[i,t] <- dbern(mu2[i,t])
+      y[i,t] ~ dbern(mu2[i,t])
       mu2[i,t] <- p[i, t-1]*z[i,t]
     }
   }
@@ -565,7 +565,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
       z[i,t] ~ dbern(mu1[i,t])
       mu1[i,t] <- phi[i,t-1]*z[i,t-1]
       #Observation process
-      y[i,t] <- dbern(mu2[i,t])
+      y[i,t] ~ dbern(mu2[i,t])
       mu2[i,t] <- p[i, t-1]*z[i,t]
     }
   }
@@ -604,7 +604,7 @@ k<-mcmcplots::as.mcmc.rjags(cjs.ind)%>%as.shinystan()%>%launch_shinystan() #maki
 par(mfrow= c(1,2), las= 1)
 hist(cjs.ind$BUGSoutput$sims.list$mean.phi, nclass= 25, col= "gray", main= "", xlab= expression(bar(phi)), ylab= "Frequency")
 abline(v= mean.phi, col= "red", lwd= 2)
-hist(cjs.ind$BUGSoutput$sims.list$sigma2, nclass= 15, col= "gray", main="", xlab= expression(sigma^2), ylab= "Frequency", xlim= c(0,3))
+hist(cjs.ind$BUGSoutput$sims.list$sigma, nclass= 15, col= "gray", main="", xlab= expression(sigma^2), ylab= "Frequency", xlim= c(0,3))
 abline(v= v.ind, col= "red", lwd= 2)
 mtext("Figure 7.5", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #Posterior distributions of mean survival and of the individual variance in survival. Red= values used for the simulation
@@ -693,7 +693,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
       z[i,t] ~ dbern(mu1[i,t])
       mu1[i,t] <- phi[i,t-1]*z[i,t-1]
       #Observation process
-      y[i,t] <- dbern(mu2[i,t])
+      y[i,t] ~ dbern(mu2[i,t])
       mu2[i,t] <- p[i, t-1]*z[i,t]
     }
   }
@@ -731,17 +731,17 @@ k<-mcmcplots::as.mcmc.rjags(cjs.ind)%>%as.shinystan()%>%launch_shinystan() #maki
 #Create graph
 lower.f <- upper.f <- lower.m <- upper.m <- numeric() #Figure of male and female survival
 for (t in 1:(n.occasions-1)){
-  lower.f[t] <- quantile(cjs.add$sims.list$phi.g1[,t], 0.025)
-  upper.f[t] <- quantile(cjs.add$sims.list$phi.g1[,t], 0.975)
-  lower.m[t] <- quantile(cjs.add$sims.list$phi.g2[,t], 0.025)
-  upper.m[t] <- quantile(cjs.add$sims.list$phi.g2[,t], 0.975)
+  lower.f[t] <- quantile(cjs.add$BUGSoutput$sims.list$phi.g1[,t], 0.025)
+  upper.f[t] <- quantile(cjs.add$BUGSoutput$sims.list$phi.g1[,t], 0.975)
+  lower.m[t] <- quantile(cjs.add$BUGSoutput$sims.list$phi.g2[,t], 0.025)
+  upper.m[t] <- quantile(cjs.add$BUGSoutput$sims.list$phi.g2[,t], 0.975)
 }
-plot(x=(1:(n.occasions-1))-0.1, y = cjs.add$mean$phi.g1, type = "b", pch = 16, ylim = c(0.2, 1), main= "Figure 7.6", ylab = "Survival probability", xlab = "Year", bty = "n", cex = 1.5, axes = FALSE)
+plot(x=(1:(n.occasions-1))-0.1, y = cjs.add$BUGSoutput$mean$phi.g1, type = "b", pch = 16, ylim = c(0.2, 1), main= "Figure 7.6", ylab = "Survival probability", xlab = "Year", bty = "n", cex = 1.5, axes = FALSE)
 axis(1, at = 1:11, labels = rep(NA,11), tcl = -0.25)
 axis(1, at = seq(2,10,2), labels = c("2","4","6","8","10"))
 axis(2, at = seq(0.2, 1, 0.1), labels = c("0.2", NA, "0.4", NA, "0.6", NA, "0.8", NA, "1.0"), las = 1)
 segments((1:(n.occasions-1))-0.1, lower.f, (1:(n.occasions-1))-0.1, upper.f)
-points(x = (1:(n.occasions-1))+0.1, y = cjs.add$mean$phi.g2, type = "b", pch = 1, lty = 2, cex = 1.5)
+points(x = (1:(n.occasions-1))+0.1, y = cjs.add$BUGSoutput$mean$phi.g2, type = "b", pch = 1, lty = 2, cex = 1.5)
 segments((1:(n.occasions-1))+0.1, lower.m, (1:(n.occasions-1))+0.1, upper.m)
 
 #Priors and constraints to convey the interaction between sex and time
@@ -1129,7 +1129,7 @@ jags.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z =
 inits <- function(){list(z = cjs.init.z(CH, f), phi.t = runif((dim(CH)[2]-1),0,1), p.t = runif((dim(CH)[2]-1),0,1))}
 
 #Parameters monitored
-params <- c("mean.phi", "beta")
+params <- c("phi.t", "p.t")
 
 #MCMC settings
 ni <- 25000
@@ -1153,22 +1153,22 @@ k<-mcmcplots::as.mcmc.rjags(cjs.t.t)%>%as.shinystan()%>%launch_shinystan() #maki
 
 #Plot posterior distributions of some phi and p
 par(mfrow = c(2, 2), cex = 1.2, las = 1, mar=c(5, 4, 2, 1))
-plot(density(cjs.t.t$sims.list$phi.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
+plot(density(cjs.t.t$BUGSoutput$sims.list$phi.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
      main = "", xlab = expression(phi[6]), ylab = "Density", frame = FALSE,
      lwd = 2)
 abline(h = 1, lty = 2, lwd = 2)
 par(mar=c(5, 3, 2, 2))
-plot(density(cjs.t.t$sims.list$phi.t[,11]), xlim = c(0, 1),
+plot(density(cjs.t.t$BUGSoutput$sims.list$phi.t[,11]), xlim = c(0, 1),
      ylim =c(0, 5), main = "", xlab = expression(phi[11]), ylab ="",
      frame = FALSE, lwd = 2)
 abline(h = 1, lty = 2, lwd = 2)
 par(mar=c(5, 4, 2, 1))
-plot(density(cjs.t.t$sims.list$p.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
+plot(density(cjs.t.t$BUGSoutput$sims.list$p.t[,6]), xlim = c(0, 1), ylim = c(0, 5),
      main = "", xlab = expression(p[6]), ylab = "Density", frame = FALSE,
      lwd = 2)
 abline(h = 1, lty = 2, lwd = 2)
 par(mar=c(5, 3, 2, 2))
-plot(density(cjs.t.t$sims.list$p.t[,11]), xlim = c(0, 1), ylim =
+plot(density(cjs.t.t$BUGSoutput$sims.list$p.t[,11]), xlim = c(0, 1), ylim =
        c(0, 5), main = "", xlab = expression(p[11]), ylab ="", frame = FALSE,
      lwd = 2)
 abline(h = 1, lty = 2, lwd = 2)
@@ -1214,17 +1214,17 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors and Constraints
   for (t in 1:(n.occasions-1)) {
     phi.t[t] ~ dunif(0,1) #Prior for the time specific survival
-    p.t[t] ~ dunif(0,1) #prior for time specific recapture
+    p[t] ~ dunif(0,1) #prior for time specific recapture
   }
   
   #Define the multimodal likelihood
-  for (t in 1:(n.occasions)) {
+  for (t in 1:(n.occasions-1)) {
     marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
   }
   
   #Calculate the number of birds released each year
   for (t in 1:(n.occasions-1)){
-    r[t] <- sum(marr[t, ])
+    r[t] <- sum(marr.a[t, ])
   }
   
   #Define the cell probabilities of the m-array
@@ -1500,7 +1500,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   mean.p ~ dunif(0, 1) # Prior for mean recapture
   
   #Define the multinomial likelihood
-  for (t in 1:(n.occasions-1)){
+  for (t in 1:(n.occasions-1)) {
     marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
   }
   
@@ -1544,8 +1544,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
       E.new[t,j] <- (sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))*(sqrt(marr.new[t,j]) - sqrt(expmarr[t,j]))
     }
   }
-  fit <- sum(E.org[,])
-  fit.new <- sum(E.new[,])
+  fit <- sum(E.org)
+  fit.new <- sum(E.new)
 }
 
 #Bundle data
