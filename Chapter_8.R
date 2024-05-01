@@ -185,6 +185,8 @@ marray.dead <- function(MR){
 }
 
 marr <- marray.dead(MR) #produce m-array
+marr.rel <-marr #work around for DAG error, CHANGED BY SKI
+
 
 #Specify model in JAGS
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -201,7 +203,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
   # Calculate the number of birds released each year
   for (t in 1:n.occasions){
-    rel[t] <- sum(marr[t,])
+    rel[t] <- sum(marr.rel[t,]) #CHANGED BY SKI
   }
   #Define the cell probabilities of the m-array
   #Main diagonal
@@ -223,7 +225,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-jags.data <- list(marr = marr, n.occasions = dim(marr)[2]-1)
+jags.data <- list(marr = marr, marr.rel= marr.rel, n.occasions = dim(marr)[2]-1) #CHANGED BY SKI
 
 #Initial values
 inits <- function(){list(mean.s = runif(1, 0, 1), mean.r = runif(1, 0, 1))}
@@ -253,10 +255,10 @@ k<-mcmcplots::as.mcmc.rjags(mr)%>%as.shinystan()%>%launch_shinystan() #making it
 
 #Create graph
 par(mfrow = c(1, 2), las = 1)
-hist(mr$sims.list$mean.s, nclass = 25, col = "gray", main = "", ylab =
+hist(mr$BUGSoutput$sims.list$mean.s, nclass = 25, col = "gray", main = "", ylab =
        "Frequency", xlab = "Survival probability")
 abline(v = 0.8, col = "red", lwd = 2)
-hist(mr$sims.list$mean.r, nclass = 25, col = "gray", main = "", ylab =
+hist(mr$BUGSoutput$sims.list$mean.r, nclass = 25, col = "gray", main = "", ylab =
        "", xlab = "Recovery probability")
 abline(v = 0.2, col = "red", lwd = 2)
 mtext("Figure 8.3", side= 3, line= -1.5, outer= T) #adding main title to multiplot
@@ -298,7 +300,10 @@ MRa <- simul.mr(SA, RA, marked.a)
 
 #Summarize data in m-arrays
 marr.j <- marray.dead(MRj)
+marr.j.rel <- marr.j #work around for DAG error, CHANGED BY SKI
+
 marr.a <- marray.dead(MRa)
+marr.a.rel <- marr.a #work around for DAG error, CHANGED BY SKI
 
 #Specify model in JAGS
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -320,8 +325,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
   #Calculate the number of birds released each year
   for (t in 1:n.occasions){
-    rel.j[t] <- sum(marr.j[t,])
-    rel.a[t] <- sum(marr.a[t,])
+    rel.j[t] <- sum(marr.j.rel[t,]) #CHANGED BY SKI
+    rel.a[t] <- sum(marr.a.rel[t,]) #CHANGED BY SKI
   }
   #Define the cell probabilities of the juvenile m-array
   #Main diagonal
@@ -364,7 +369,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-jags.data <- list(marr.j = marr.j, marr.a = marr.a, n.occasions = dim(marr.j)[2]-1)
+jags.data <- list(marr.j = marr.j, marr.j.rel= marr.j.rel, marr.a = marr.a, marr.a.rel = marr.a.rel, n.occasions = dim(marr.j)[2]-1) #CHANGED BY SKI
 
 #Initial values
 inits <- function(){list(mean.sj = runif(1, 0, 1), mean.sa = runif(1, 0, 1), mean.rj = runif(1, 0, 1), mean.ra = runif(1, 0, 1))}
@@ -396,7 +401,10 @@ k<-mcmcplots::as.mcmc.rjags(mr.age)%>%as.shinystan()%>%launch_shinystan() #makin
 # 8.4 Real-Data Example: Age-Dependent Survival in Swiss Red Kites
 #-------------------------------------------------------------------------------
 marray.juv <- c(42, 18, 5, 7, 4, 3, 2, 1, 2, 2, 1, 0, 1, 3, 0, 0, 1, 1388) #Juvenile "m-array" column
+rel.j <- sum(marray.juv[]) #Define the multinomial likelihood, CHANGED BY SKI
+
 marray.ad <- c(3, 1, 1, 3, 0, 2, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 137) #Adult "m-array" column
+rel.a <- sum(marray.ad[]) #Define the multinomial likelihood, CHANGED BY SKI
 
 #Specify model in JAGS
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -411,8 +419,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   marr.j[1:(n.age+1)] ~ dmulti(pr.j[], rel.j)
   marr.a[1:(n.age+1)] ~ dmulti(pr.a[], rel.a)
   #Calculate the number of birds released each year
-  rel.j <- sum(marr.j[])
-  rel.a <- sum(marr.a[])
+  #rel.j <- sum(marr.j[]) #CHANGED BY SKI
+  #rel.a <- sum(marr.a[]) #CHANGED BY SKI
   #Define the cell probabilities of the juvenile m-array
   #First element
   pr.j[1] <- (1-sjuv)*rjuv
@@ -435,7 +443,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-jags.data <- list(marr.j = marray.juv, marr.a = marray.ad, n.age = length(marray.juv)-1)
+jags.data <- list(marr.j = marray.juv, marr.a = marray.ad, n.age = length(marray.juv)-1, rel.j = rel.j, rel.a= rel.a) #CHANGED BY SKI
 
 #Initial values
 inits <- function(){list(sjuv = runif(1, 0, 1), ssub = runif(1, 0, 1), sad = runif(1, 0, 1), rjuv = runif(1, 0, 1), rad = runif(1, 0, 1))}
@@ -480,19 +488,19 @@ k<-mcmcplots::as.mcmc.rjags(rk.ageB)%>%as.shinystan()%>%launch_shinystan() #maki
 
 #Plot posterior distributions
 par(mfrow = c(2, 3), las = 1)
-hist(rk.ageB$sims.list$sjuv, breaks = 20, col = "gray", main = "", xlab = "Juvenile survival")
-hist(rk.ageB$sims.list$ssub, breaks = 20, col = "gray", main = "", xlab = "Subadult survival")
-hist(rk.ageB$sims.list$sad, breaks = 20, col = "gray", main = "", xlab = "Adult survival")
-hist(rk.ageB$sims.list$rjuv, breaks = 20, col = "gray", main = "", xlab = "Juvenile recovery", xlim = c(0, 0.2))
-hist(rk.ageB$sims.list$rad, breaks = 20, col = "gray", main = "", xlab = "Adult recovery")
+hist(rk.ageB$BUGSoutput$sims.list$sjuv, breaks = 20, col = "gray", main = "", xlab = "Juvenile survival")
+hist(rk.ageB$BUGSoutput$sims.list$ssub, breaks = 20, col = "gray", main = "", xlab = "Subadult survival")
+hist(rk.ageB$BUGSoutput$sims.list$sad, breaks = 20, col = "gray", main = "", xlab = "Adult survival")
+hist(rk.ageB$BUGSoutput$sims.list$rjuv, breaks = 20, col = "gray", main = "", xlab = "Juvenile recovery", xlim = c(0, 0.2))
+hist(rk.ageB$BUGSoutput$sims.list$rad, breaks = 20, col = "gray", main = "", xlab = "Adult recovery")
 mtext("Figure 8.5", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 
 #Plot comparison posterior distributions of juvenile survival under two priors
-plot(density(rk.ageA$sims.list$sjuv), ylim = c(0, 5), lwd = 2, main = "Figure 8.6", xlab = "Juvenile survival", las = 1)
-points(density(rk.ageB$sims.list$sjuv), col = "red", type = "l", lwd = 2)
+plot(density(rk.ageA$BUGSoutput$sims.list$sjuv), ylim = c(0, 5), lwd = 2, main = "Figure 8.6", xlab = "Juvenile survival", las = 1)
+points(density(rk.ageB$BUGSoutput$sims.list$sjuv), col = "red", type = "l", lwd = 2)
 text(x = 0.5, y = 4.8, "Prior distributions", pos = 4, font = 3)
 legend(x = 0.6, y = 4.7, legend = c("U(0,1)", "beta(4.2,2.8)"), lwd = c(2, 2), col = c("black", "red"), bty = "n")
 
-quantile(rk.ageA$sims.list$ssub-rk.ageA$sims.list$sjuv, prob = c(0.025, 0.975))
-quantile(rk.ageA$sims.list$sad-rk.ageA$sims.list$ssub, prob = c(0.025, 0.975))
+quantile(rk.ageA$BUGSoutput$sims.list$ssub-rk.ageA$sims.list$sjuv, prob = c(0.025, 0.975))
+quantile(rk.ageA$BUGSoutput$sims.list$sad-rk.ageA$sims.list$ssub, prob = c(0.025, 0.975))
 #-------------------------------------------------------------------------------
