@@ -534,7 +534,7 @@ CH <- simul.cjs(PHI, P, marked)
 
 #Create vector with occasion of marking 
 get.first <- function(x) min(which(x!=0))
-f <- applu(CH, 1, get.first)
+f <- apply(CH, 1, get.first)
 
 #Specify model in JAGS language 
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -677,7 +677,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     phi.g2[t] <- 1/(1+exp(-gamma[t]-beta[2])) #Back transformed survival of females
   }
   beta[1] <- 0 #Corner constraint
-  beta[2] ~ dnrom(0, 0.01); T(-10,10) #Prior for difference in male and female survival
+  beta[2] ~ dnorm(0, 0.01); T(-10,10) #Prior for difference in male and female survival
   
   #For recapture parameters
   for(u in 1:g) {
@@ -947,13 +947,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH), x = x)
+jags.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH), x = x)
 
 #Initial values
 inits <- function(){list(z = cjs.init.z(CH, f), beta = runif(2, 0, 1), mean.p = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("beta", "mean.p")
+params <- c("beta", "mean.p")
 
 #MCMC settings
 ni <- 2000
@@ -1044,13 +1044,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH), m = m)
+jags.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH), m = m)
 
 #Initial values
 inits <- function(){list(z = cjs.init.z(CH, f), mean.phi = runif(1, 0, 1), beta = runif(2, 0, 1))}
 
 #Parameters monitored
-parameters <- c("mean.phi", "beta")
+params <- c("mean.phi", "beta")
 
 #MCMC settings
 ni <- 20000
@@ -1123,13 +1123,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH))
+jags.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions= dim(CH)[2], z = known.state.cjs(CH))
 
 #Initial values
 inits <- function(){list(z = cjs.init.z(CH, f), phi.t = runif((dim(CH)[2]-1),0,1), p.t = runif((dim(CH)[2]-1),0,1))}
 
 #Parameters monitored
-parameters <- c("mean.phi", "beta")
+params <- c("mean.phi", "beta")
 
 #MCMC settings
 ni <- 25000
@@ -1277,7 +1277,7 @@ jags.data <- list(marr = marr, n.occasions = dim(marr)[2])
 inits <- function(){list(phi = runif(dim(marr)[2]-1, 0, 1), p = runif(dim(marr)[2]-1, 0, 1))}
 
 # Parameters monitored
-parameters <- c("phi", "p", "fit", "fit.new")
+params <- c("phi", "p", "fit", "fit.new")
 
 # MCMC settings
 ni <- 10000
@@ -1348,6 +1348,7 @@ for (i in 1:dim(CH.J.R)[1]){
 #Add grown-up juveniles to adults and create m-array
 CH.A.m <- rbind(CH.A, CH.J.R1)
 CH.A.marray <- marray(CH.A.m)
+marr.a.r <- CH.A.marray #work around for DAG error, CHANGED BY SKI
 
 #Create CH matrix for juveniles, ignoring subsequent recaptures
 second <- numeric()
@@ -1369,6 +1370,7 @@ CH.J.R.marray[,dim(CH.J)[2]] <- 0
 #Create the m-array for juveniles never recaptured and add it to the previous m-array
 CH.J.N.marray <- marray(CH.J.N)
 CH.J.marray <- CH.J.R.marray + CH.J.N.marray
+marr.j.r <- CH.J.marray #work around for DAG error, CHANGED BY SKI
 
 #Specify model in JAGS language 
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -1390,9 +1392,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   }
   
   #Calculate the number of birds released each year
-  for (t in 1:(n.occasions01)){
-    r.j[t] <- sum(marr.j[t,])
-    r.a[t] <- sum(marr.a[t,])
+  for (t in 1:(n.occasions-1)){
+    r.j[t] <- sum(marr.j.r[t,]) #CHANGED BY SKI
+    r.a[t] <- sum(marr.a.r[t,]) #CHANGED BY SKI
   }
   
   #Define the cell probabilities of the m-arrays
@@ -1420,13 +1422,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(marr.j = CH.J.marray, marr.a = CH.A.marray, n.occasions = dim(CH.J.marray)[2])
+jags.data <- list(marr.j = CH.J.marray, marr.j.r = marr.j.r, marr.a = CH.A.marray, marr.a.r = marr.a.r, n.occasions = dim(CH.J.marray)[2]) #CHANGED BY SKI
 
 #Initial values
 inits <- function(){list(mean.phijuv = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.p = runif(1, 0, 1))}
 
 #Parameters monitored
-parameters <- c("mean.phijuv", "mean.phiad", "mean.p")
+params <- c("mean.phijuv", "mean.phiad", "mean.p")
 
 #MCMC settings
 ni <- 3000
@@ -1449,11 +1451,11 @@ k<-mcmcplots::as.mcmc.rjags(cjs.2)%>%as.shinystan()%>%launch_shinystan() #making
 
 #Create graph
 par(mfrow = c(1, 3), las = 1)
-hist(cjs.2$sims.list$mean.phijuv, nclass = 30, col = "gray", main = "", xlab = "Juvenile survival", ylab = "Frequency")
+hist(cjs.2$BUGSoutput$sims.list$mean.phijuv, nclass = 30, col = "gray", main = "", xlab = "Juvenile survival", ylab = "Frequency")
 abline(v = phi.juv, col = "red", lwd = 2)
-hist(cjs.2$sims.list$mean.phiad, nclass = 30, col = "gray", main = "", xlab = "Adult survival", ylab = "")
+hist(cjs.2$BUGSoutput$sims.list$mean.phiad, nclass = 30, col = "gray", main = "", xlab = "Adult survival", ylab = "")
 abline(v = phi.ad, col = "red", lwd = 2)
-hist(cjs.2$sims.list$mean.p, nclass = 30, col = "gray", main = "", xlab = "Recapture", ylab = "")
+hist(cjs.2$BUGSoutput$sims.list$mean.p, nclass = 30, col = "gray", main = "", xlab = "Recapture", ylab = "")
 abline(v = p[1], col = "red", lwd = 2)
 mtext("Figure 7.10", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
@@ -1547,13 +1549,13 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-bugs.data <- list(marr = m.leisleri, n.occasions = dim(m.leisleri)[2])
+jags.data <- list(marr = m.leisleri, n.occasions = dim(m.leisleri)[2])
 
 #Initial values
 inits <- function(){list(mean.phi = runif(1, 0, 1), sigma = runif(1, 0, 5), mean.p = runif(1, 0, 1))}
 
 # Parameters monitored
-parameters <- c("phi", "mean.p", "mean.phi", "sigma2", "sigma2.real", "fit", "fit.new")
+params <- c("phi", "mean.p", "mean.phi", "sigma2", "sigma2.real", "fit", "fit.new")
 
 # MCMC settings
 ni <- 5000
