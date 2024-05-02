@@ -756,18 +756,247 @@ abline(v = p.B, col = "red", lwd = 2)
 # 9.5 Joint Analysis of Capture-Recapture and Mark-Recovery Data
 # 9.5.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
+#Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
+s <- 0.8
+F <- 0.6
+r <- 0.1
+p <- 0.5
+n.occasions <- 10
+n.states <- 4
+n.obs <- 3
+marked <- matrix(0, ncol = n.states, nrow = n.occasions)
+marked[,1] <- rep(100, n.occasions) #Releases in study area
 
+#Define matrices with survival, transition and recapture probabilities
+#These are 4-dimensional matrices, with
+#Dimension 1: state of departure
+#Dimension 2: state of arrival
+#Dimension 3: individual
+#Dimension 4: time
+
+#1. State process matrix
+totrel<- sum(marked)*(n.occasions-1)
+PSI.STATE<- array(NA, dim=c(n.states, n.states, totrel, n.occasions-1))
+for (i in 1:totrel){
+  for (t in 1:(n.occasions-1)){
+    PSI.STATE[,,i,t] <- matrix(c(
+      s*F, s*(1-F), 1-s, 0,
+      0, s, 1-s, 0,
+      0, 0, 0, 1,
+      0, 0, 0, 1), nrow = n.states, byrow = TRUE)
+  } 
+} 
+
+#2.Observation process matrix
+PSI.OBS <- array(NA, dim=c(n.states, n.obs, totrel, n.occasions-1))
+for (i in 1:totrel){
+  for (t in 1:(n.occasions-1)){
+    PSI.OBS[,,i,t] <- matrix(c(
+      p, 0, 1-p,
+      0, 0, 1,
+      0, r, 1-r,
+      0, 0, 1), nrow = n.states, byrow = TRUE)
+  } 
+} 
+
+#Execute simulation function
+sim <- simul.ms(PSI.STATE, PSI.OBS, marked)
+CH <- sim$CH
+
+#Compute date of first capture
+get.first <- function(x) min(which(x!=0))
+f <- apply(CH, 1, get.first)
+
+#Recode CH matrix: note, a 0 is not allowed!
+#1 = alive and in study are, 2 = recovered dead, 3 = not seen or recovered
+rCH <- CH #Recoded CH
+rCH[rCH==0] <- 3
 #-------------------------------------------------------------------------------
 
 # 9.5.3 Analysis of the Model
 #-------------------------------------------------------------------------------
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #------------------------------------------------
+  #Parameters:
+  # s: true survival probability
+  # F: fidelity probability
+  # r: recovery probability
+  # p: recapture/resighting probability
+  #------------------------------------------------
+  #States (S):
+  # 1 alive in study area
+  # 2 alive outside study area
+  # 3 recently dead and recovered
+  # 4 recently dead, but not recovered, or dead (absorbing)
+  #Observations (O):
+  # 1 seen alive
+  # 2 recovered dead
+  # 3 neither seen nor recovered
+  #------------------------------------------------
+  
+  #Priors and constraints
+  for (t in 1:(n.occasions-1)){
+    s[t] <- mean.s
+    F[t] <- mean.f
+    r[t] <- mean.r
+    p[t] <- mean.p
+  }
+  mean.s ~ dunif(0, 1) #Prior for mean survival
+  mean.f ~ dunif(0, 1) #Prior for mean fidelity
+  mean.r ~ dunif(0, 1) #Prior for mean recovery
+  mean.p ~ dunif(0, 1) #Prior for mean recapture
+  
+  #Define state-transition and observation matrices
+  for (i in 1:nind){
+    #Define probabilities of state S(t+1) given S(t)
+    for (t in f[i]:(n.occasions-1)){
+      ps[1,i,t,1] <- s[t]*F[t]
+      ps[1,i,t,2] <- s[t]*(1-F[t])
+      ps[1,i,t,3] <- (1-s[t])*r[t]
+      ps[1,i,t,4] <- (1-s[t])*(1-r[t])
+      ps[2,i,t,1] <- 0
+      ps[2,i,t,2] <- s[t]
+      ps[2,i,t,3] <- (1-s[t])*r[t]
+      ps[2,i,t,4] <- (1-s[t])*(1-r[t])
+      ps[3,i,t,1] <- 0
+      ps[3,i,t,2] <- 0
+      ps[3,i,t,3] <- 0
+      ps[3,i,t,4] <- 1
+      ps[4,i,t,1] <- 0
+      ps[4,i,t,2] <- 0
+      ps[4,i,t,3] <- 0
+      ps[4,i,t,4] <- 1
+  
+      #Define probabilities of O(t) given S(t)
+      po[1,i,t,1] <- p[t]
+      po[1,i,t,2] <- 0
+      po[1,i,t,3] <- 1-p[t]
+      po[2,i,t,1] <- 0
+      po[2,i,t,2] <- 0
+      po[2,i,t,3] <- 1
+      po[3,i,t,1] <- 0
+      po[3,i,t,2] <- 1
+      po[3,i,t,3] <- 0
+      po[4,i,t,1] <- 0
+      po[4,i,t,2] <- 0
+      po[4,i,t,3] <- 1
+    } 
+  } 
+  
+  #Likelihood
+  for (i in 1:nind){
+    #Define latent state at first capture
+    z[i,f[i]] <- Y[i,f[i]]
+    for (t in (f[i]+1):n.occasions){
+      #State process: draw S(t) given S(t−1)
+      z[i,t] ~ dcat(ps[z[i,t−1], i, t−1,])
+      #Observation process: draw O(t) given S(t)
+      y[i,t] ~ dcat(po[z[i,t], i, t−1,])
+    } 
+  } 
+}
 
+#Bundle data
+jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1])
+
+#Initial values (note: function ch.init is defined in section 7.3)
+inits <- function(){list(mean.s = runif(1, 0, 1), mean.f = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.r = runif(1, 0, 1), z = ch.init(CH, f))}
+
+#Parameters monitored
+params <- c("mean.s", "mean.f", "mean.r", "mean.p")
+
+#MCMC settings
+ni <- 40000
+nt <- 10
+nb <- 10000
+nc <- 3
+
+#Call JAGS from R
+lifedead <- jags(data  = jags.data,
+                 inits = inits,
+                 parameters.to.save = params,
+                 model.file = jags.model.txt,
+                 n.chains = nc,
+                 n.thin= nt,
+                 n.iter = ni,
+                 n.burnin = nb)
+
+print(lifedead, digits = 3)
+
+k<-mcmcplots::as.mcmc.rjags(lifedead)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
 
 # 9.6 Estimation of Movement Among Three Sites
 # 9.6.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
+#Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
+phiA <- 0.85
+phiB <- 0.75
+phiC <- 0.65
+psiAB <- 0.3
+psiAC <- 0.2
+psiBA <- 0.5
+psiBC <- 0.1
+psiCA <- 0.6
+psiCB <- 0.1
+pA <- 0.7
+pB <- 0.4
+pC <- 0.5
+n.occasions <- 6
+n.states <- 4
+n.obs <- 4
+marked <- matrix(NA, ncol = n.states, nrow = n.occasions)
+marked[,1] <- rep(50, n.occasions)
+marked[,2] <- rep(50, n.occasions)
+marked[,3] <- rep(50, n.occasions)
+marked[,4] <- rep(0, n.occasions)
 
+#Define matrices with survival, transition and recapture probabilities
+#These are 4-dimensional matrices, with
+#Dimension 1: state of departure
+#Dimension 2: state of arrival
+#Dimension 3: individual
+#Dimension 4: time
+
+#1. State process matrix
+totrel <- sum(marked)*(n.occasions-1)
+PSI.STATE <- array(NA, dim=c(n.states, n.states, totrel, n.occasions-1))
+for (i in 1:totrel){
+  for (t in 1:(n.occasions-1)){
+    PSI.STATE[,,i,t] <- matrix(c(
+      phiA*(1-psiAB-psiAC), phiA*psiAB, phiA*psiAC, 1-phiA,
+      phiB*psiBA, phiB*(1-psiBA-psiBC), phiB*psiBC, 1-phiB,
+      phiC*psiCA, phiC*psiCB, phiC*(1-psiCA-psiCB), 1-phiC,
+      0, 0, 0, 1),
+      nrow = n.states, byrow = TRUE)
+  } 
+} 
+
+#2.Observation process matrix
+PSI.OBS <- array(NA, dim=c(n.states, n.obs, totrel, n.occasions-1))
+for (i in 1:totrel){
+  for (t in 1:(n.occasions-1)){
+    PSI.OBS[,,i,t] <- matrix(c(
+      pA, 0, 0, 1-pA,
+      0, pB, 0, 1-pB,
+      0, 0, pC, 1-pC,
+      0, 0, 0, 1), nrow = n.states, byrow = TRUE)
+  } 
+} 
+
+# Execute simulation function
+sim <- simul.ms(PSI.STATE, PSI.OBS, marked)
+CH <- sim$CH
+
+# Compute vector with occasions of first capture
+get.first <- function(x) min(which(x!=0))
+f <- apply(CH, 1, get.first)
+# Recode CH matrix: note, a 0 is not allowed in WinBUGS!
+# 1 = seen alive in A, 2 = seen alive in B, 3, seen alive in C, 4 = not seen
+rCH <- CH # Recoded CH
+rCH[rCH==0] <- 4
 #-------------------------------------------------------------------------------
 
 # 9.6.3 Analysis of the Model
