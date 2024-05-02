@@ -1001,10 +1001,276 @@ rCH[rCH==0] <- 4
 
 # 9.6.3 Analysis of the Model
 #-------------------------------------------------------------------------------
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #-----------------------------------------------
+  #Parameters:
+  # phiA: survival probability at site A
+  # phiB: survival probability at site B
+  # phiC: survival probability at site C
+  # psiAB: movement probability from site A to site B
+  # psiAC: movement probability from site A to site C
+  # psiBA: movement probability from site B to site A
+  # psiBC: movement probability from site B to site C
+  # psiCA: movement probability from site C to site A
+  # psiCB: movement probability from site C to site B
+  # pA: recapture probability at site A
+  # pB: recapture probability at site B
+  # pC: recapture probability at site C
+  #-----------------------------------------------
+  #States (S):
+  # 1 alive at A
+  # 2 alive at B
+  # 3 alive at C
+  # 4 dead
+  #Observations (O):
+  # 1 seen at A
+  # 2 seen at B
+  # 3 seen at C
+  # 4 not seen
+  #-----------------------------------------------
+  
+  #Priors and constraints
+  #Survival and recapture: uniform
+  phiA ~ dunif(0, 1)
+  phiB ~ dunif(0, 1)
+  phiC ~ dunif(0, 1)
+  pA ~ dunif(0, 1)
+  pB ~ dunif(0, 1)
+  pC ~ dunif(0, 1)
+  #Transitions: multinomial logit
+  #Normal priors on logit of all but one transition prob.
+  for (i in 1:2){
+    lpsiA[i] ~ dnorm(0, 0.001)
+    lpsiB[i] ~ dnorm(0, 0.001)
+    lpsiC[i] ~ dnorm(0, 0.001)
+  }
+  
+  #Constrain the transitions such that their sum is < 1
+  for (i in 1:2){
+    psiA[i] <- exp(lpsiA[i]) / (1 + exp(lpsiA[1]) + exp(lpsiA[2]))
+    psiB[i] <- exp(lpsiB[i]) / (1 + exp(lpsiB[1]) + exp(lpsiB[2]))
+    psiC[i] <- exp(lpsiC[i]) / (1 + exp(lpsiC[1]) + exp(lpsiC[2]))
+  }
+  
+  #Calculate the last transition probability
+  psiA[3] <- 1-psiA[1]-psiA[2]
+  psiB[3] <- 1-psiB[1]-psiB[2]
+  psiC[3] <- 1-psiC[1]-psiC[2]
+  
+  #Define state-transition and observation matrices
+  for (i in 1:nind){
+    #Define probabilities of state S(t+1) given S(t)
+    for (t in f[i]:(n.occasions-1)){
+      ps[1,i,t,1] <- phiA * psiA[1]
+      ps[1,i,t,2] <- phiA * psiA[2]
+      ps[1,i,t,3] <- phiA * psiA[3]
+      ps[1,i,t,4] <- 1-phiA
+      ps[2,i,t,1] <- phiB * psiB[1]
+      ps[2,i,t,2] <- phiB * psiB[2]
+      ps[2,i,t,3] <- phiB * psiB[3]
+      ps[2,i,t,4] <- 1-phiB
+      ps[3,i,t,1] <- phiC * psiC[1]
+      ps[3,i,t,2] <- phiC * psiC[2]
+      ps[3,i,t,3] <- phiC * psiC[3]
+      ps[3,i,t,4] <- 1-phiC
+      ps[4,i,t,1] <- 0
+      ps[4,i,t,2] <- 0
+      ps[4,i,t,3] <- 0
+      ps[4,i,t,4] <- 1
+      
+      #Define probabilities of O(t) given S(t)
+      po[1,i,t,1] <- pA
+      po[1,i,t,2] <- 0
+      po[1,i,t,3] <- 0
+      po[1,i,t,4] <- 1-pA
+      po[2,i,t,1] <- 0
+      po[2,i,t,2] <- pB
+      po[2,i,t,3] <- 0
+      po[2,i,t,4] <- 1-pB
+      po[3,i,t,1] <- 0
+      po[3,i,t,2] <- 0
+      po[3,i,t,3] <- pC
+      po[3,i,t,4] <- 1-pC
+      po[4,i,t,1] <- 0
+      po[4,i,t,2] <- 0
+      po[4,i,t,3] <- 0
+      po[4,i,t,4] <- 1
+    } 
+  } 
+  
+  #Likelihood
+  for (i in 1:nind){
+    #Define latent state at first capture
+    z[i,f[i]] <- Y[i,f[i]]
+    for (t in (f[i]+1):n.occasions){
+      #State process: draw S(t) given S(t−1)
+      z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
+      #Observation process: draw O(t) given S(t)
+      y[i,t] ~ dcat(po[z[i,t], i, t-1,])
+    } 
+  } 
+}
 
+#Bundle data
+jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1], z = known.state.ms(rCH, 4))
+
+#Initial values
+inits <- function(){list(phiA = runif(1, 0, 1), phiB = runif(1, 0, 1),
+                         phiC = runif(1, 0, 1), lpsiA = rnorm(2), lpsiB = rnorm(2), lpsiC =
+                         rnorm(2), pA = runif(1, 0, 1) , pB = runif(1, 0, 1) , pC = runif(1, 0, 1),
+                         z = ms.init.z(rCH, f))}
+
+#Parameters monitored
+params <- c("phiA", "phiB", "phiC", "psiA", "psiB", "psiC", "pA","pB", "pC")
+
+# MCMC settings
+ni <- 50000
+nt <- 6
+nb <- 20000
+nc <- 3
+
+#Call JAGS from R
+ms3 <- jags(data  = jags.data,
+                 inits = inits,
+                 parameters.to.save = params,
+                 model.file = jags.model.txt,
+                 n.chains = nc,
+                 n.thin= nt,
+                 n.iter = ni,
+                 n.burnin = nb)
+
+print(ms3, digits = 3)
+
+k<-mcmcplots::as.mcmc.rjags(ms3)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
 
 # 9.7 Real-Data Example: the Showy Lady's Slipper
 #-------------------------------------------------------------------------------
+CH <- as.matrix(read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/orchids.txt", sep=" ", header = F))
+n.occasions <- dim(CH)[2]
 
+#Compute vector with occasion of first capture
+f <- numeric()
+for (i in 1:dim(CH)[1]){f[i] <- min(which(CH[i,]!=0))}
+# Recode CH matrix: note, a 0 is not allowed by WinBUGS!
+# 1 = seen vegetative, 2 = seen flowering, 3 = not seen
+rCH <- CH # Recoded CH
+rCH[rCH==0] <- 3
+
+#Specify model in JAGS
+jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+  
+  #-----------------------------------------------
+  #Parameters:
+  # s: survival probability
+  # psiV: transitions from vegetative
+  # psiF: transitions from flowering
+  # psiD: transitions from dormant
+  #-----------------------------------------------
+  #States (S):
+  # 1 vegetative
+  # 2 flowering
+  # 3 dormant
+  # 4 dead
+  # Observations (O):
+  # 1 seen vegetative
+  # 2 seen flowering
+  # 3 not seen
+  #-----------------------------------------------
+  
+  # Priors and constraints
+  # Survival: uniform
+  for (t in 1:(n.occasions-1)){
+    s[t] ~ dunif(0, 1)
+  }
+  #Transitions: gamma priors
+  for (i in 1:3){
+    a[i] ~ dgamma(1, 1)
+    psiD[i] <- a[i]/sum(a[])
+    b[i] ~ dgamma(1, 1)
+    psiV[i] <- b[i]/sum(b[])
+    c[i] ~ dgamma(1, 1)
+    psiF[i] <- c[i]/sum(c[])
+  }
+  
+  #Define state-transition and observation matrices
+  for (i in 1:nind) {
+    #Define probabilities of state S(t+1) given S(t)
+    for (t in 1:(n.occasions-1)){
+      ps[1,i,t,1] <- s[t] * psiV[1]
+      ps[1,i,t,2] <- s[t] * psiV[2]
+      ps[1,i,t,3] <- s[t] * psiV[3]
+      ps[1,i,t,4] <- 1-s[t]
+      ps[2,i,t,1] <- s[t] * psiF[1]
+      ps[2,i,t,2] <- s[t] * psiF[2]
+      ps[2,i,t,3] <- s[t] * psiF[3]
+      ps[2,i,t,4] <- 1-s[t]
+      ps[3,i,t,1] <- s[t] * psiD[1]
+      ps[3,i,t,2] <- s[t] * psiD[2]
+      ps[3,i,t,3] <- s[t] * psiD[3]
+      ps[3,i,t,4] <- 1-s[t]
+      ps[4,i,t,1] <- 0
+      ps[4,i,t,2] <- 0
+      ps[4,i,t,3] <- 0
+      ps[4,i,t,4] <- 1
+      
+      # Define probabilities of O(t) given S(t)
+      po[1,i,t,1] <- 1
+      po[1,i,t,2] <- 0
+      po[1,i,t,3] <- 0
+      po[2,i,t,1] <- 0
+      po[2,i,t,2] <- 1
+      po[2,i,t,3] <- 0
+      po[3,i,t,1] <- 0
+      po[3,i,t,2] <- 0
+      po[3,i,t,3] <- 1
+      po[4,i,t,1] <- 0
+      po[4,i,t,2] <- 0
+      po[4,i,t,3] <- 1
+    } 
+} 
+
+#Likelihood
+for (i in 1:nind){
+  #Define latent state at first capture
+  z[i,f[i]] <- Y[i,f[i]]
+  for (t in (f[i]+1):n.occasions){
+    #State process: draw S(t) given S(t−1)
+    z[i,t] ~ dcat(ps[z[i,t−1], i, t−1,])
+    #Observation process: draw O(t) given S(t)
+    y[i,t] ~ dcat(po[z[i,t], i, t−1,])
+  } 
+} 
+}
+
+#Bundle data
+jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1], z = known.state.ms(rCH, 3))
+
+#Initial values
+inits <- function(){list(s = runif((dim(rCH)[2]-1),0,1), z = ms.init.z(rCH, f))}
+
+#Parameters monitored
+parameters <- c("s", "psiV", "psiF", "psiD")
+
+#MCMC settings
+ni <- 5000
+nt <- 3
+nb <- 2000
+nc <- 3
+
+#Call JAGS from R
+ls <- jags(data  = jags.data,
+                 inits = inits,
+                 parameters.to.save = params,
+                 model.file = jags.model.txt,
+                 n.chains = nc,
+                 n.thin= nt,
+                 n.iter = ni,
+                 n.burnin = nb)
+
+print(ls, digits = 3)
+
+k<-mcmcplots::as.mcmc.rjags(ls)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
