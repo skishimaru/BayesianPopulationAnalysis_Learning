@@ -5,6 +5,8 @@ library(R2jags) #to run JAGS
 library(shinystan) #to run shiny stan
 library(tidyverse) #to utilize pipe operators
 
+#NOTE: These examples are only written in state space formulation and not multinominal likelihood because WinBUGS does not have matrix-multiplication (but JAGS does)
+
 # 9.2 Estimation of Movement between Two Sites
 # 9.2.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
@@ -98,7 +100,8 @@ simul.ms <- function(PSI.STATE, PSI.OBS, marked, unobservable = NA){
 }
 #Execute function
 sim <- simul.ms(PSI.STATE, PSI.OBS, marked)
-CH <- sim$CH
+CH <- sim$CH #In the matrix: 1= site A, 2= site B, and 0= non-capture
+#To fit this model in a state space formulation we need to 1. make a vector indicating the occasion of marking for each individual and 2. replace 0 with 3 to match the observed states (3= not seen)
 
 #Compute vector with occasion of first capture
 get.first <- function(x) min(which(x!=0))
@@ -178,7 +181,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
       z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
@@ -239,6 +242,7 @@ ms <- jags(data  = jags.data,
 print(ms, digits = 3)
 
 k<-mcmcplots::as.mcmc.rjags(ms)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#rhat= 1.06, not terrible convergence but could be better
 
 #Create Plot
 par(mfrow = c(3, 2), las = 1)
@@ -254,8 +258,11 @@ hist(ms$BUGSoutput$sims.list$mean.p[,1], col = "gray", main = "", xlab = express
 abline(v = pA, col = "red")
 hist(ms$BUGSoutput$sims.list$mean.p[,2], col = "gray", main = "", xlab = expression(p[B]), ylab="", ylim=c(0,1300))
 abline(v = pB, col = "red")
+mtext("Figure 9.3", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 
-#Specify alternative model 1 in JAGS
+#The model above can be extended by updating the priors and constraint section
+#However the model above can also be changed to improve efficiency 
+#Specify alternative model 1 in JAGS: improve efficiency by removing individual effects
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors and constraints
   for (t in 1:(n.occasions-1)){
@@ -299,17 +306,18 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
-      z[i,t] ~ dcat(ps[z[i,t-1], t-1,])
+      z[i,t] ~ dcat(ps[z[i,t-1], t-1])
       #Observation process: draw O(t) given S(t)
       y[i,t] ~ dcat(po[z[i,t], t-1,])
     } 
   } 
 }
+#Changes made in this model reduces computing time by ~30%
 
-#Specify alternative model 2 in JAGS
+#Specify alternative model 2 in JAGS: further improve efficiency by removing temporal effects
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors and constraints
   phiA ~ dunif(0, 1) #Prior for mean survival in A
@@ -345,25 +353,28 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
-      z[i,t] ~ dcat(ps[z[i,t−1],])
+      z[i,t] ~ dcat(ps[z[i,t-1], t-1])
       #Observation process: draw O(t) given S(t)
       y[i,t] ~ dcat(po[z[i,t],])
     } 
   } 
 }
+#Changes made in this model reduces computing time by ~40%
+#The following examples will continue to use the first model (that does not account for computing efficiency), but the other two should be utilized if efficiency is an important factor
 #-------------------------------------------------------------------------------
 
 # 9.3 Accounting for Temporary Emigration
 # 9.3.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
+#Example: Fire salamander recapture based on cave specific hibernation
 #Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
 phi <- 0.85
-psiIO <- 0.2
-psiOI <- 0.3
-p <- 0.7
+psiIO <- 0.2 #Probability an individual is present becoming absent in the next year
+psiOI <- 0.3 #Probability an individual that is absent becomes present the next year
+p <- 0.7 #Recapture given presence in the specific cave
 n.occasions <- 8
 n.states <- 3
 n.obs <- 2
@@ -476,7 +487,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
       z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
@@ -514,6 +525,7 @@ tempemi <- jags(data  = jags.data,
 print(tempemi, digits = 3)
 
 k<-mcmcplots::as.mcmc.rjags(tempemi)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#rhat= 1, good convergence
 
 #Create plot
 par(mfrow = c(2, 2), las = 1)
@@ -525,6 +537,7 @@ hist(tempemi$BUGSoutput$sims.list$mean.psiOI, col = "gray", main = "", xlab = ex
 abline(v = psiOI, col = "red", lwd = 2)
 hist(tempemi$BUGSoutput$sims.list$mean.p, col = "gray", main = "", xlab = expression(p), ylab = "")
 abline(v = p, col = "red", lwd = 2)
+mtext("Figure 9.5", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 9.4 Estimation of Age-Specific Probability of First Breeding
@@ -590,6 +603,7 @@ f <- apply(CH, 1, get.first)
 #1 = seen as juv, 2 = seen no rep, 3 = seen rep, 4 = not seen
 rCH <- CH # Recoded CH
 rCH[rCH==0] <- 4
+#Capture histories: 1= chick was marked, 2= non-breeding individual was observed, 3= an individual has been observed (breeding or non-breeding) and was also observed the previous day, 4= not observed
 #-------------------------------------------------------------------------------
 
 # 9.4.3 Analysis of the Model
@@ -695,7 +709,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
       z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
@@ -708,8 +722,36 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Bundle data
 jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1])
 
-#Initial values (note: function ch.init is defined in section 7.3)
-inits <- function(){list(mean.phi1 = runif(1, 0, 1), mean.phi2 = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.alpha1 = runif(1, 0, 1), mean.alpha2 = runif(1, 0, 1), mean.pNB = runif(1, 0, 1), mean.pB = runif(1, 0, 1), z = ch.init(rCH, f))}
+#Initial values (note: function agefirst.init is created for JAGS and from vogelwarte.ch)
+agefirst.init <- function(ch, f){
+  age <- array(NA, dim=dim(ch))
+  for (i in 1:nrow(ch)){
+    for (t in f[i]:ncol(ch)){
+      age[i,t] <- min(c(t-f[i]+1, 4))
+    }
+  }
+  ini <- array(NA, dim=dim(ch))
+  for (i in 1:nrow(ch)){
+    for (t in f[i]:ncol(ch)){
+      if(ch[i,t]==1) ini[i,t] <- 1
+      if(ch[i,t]==2&age[i,t]==2) ini[i,t] <- 2
+      if(ch[i,t]==3&age[i,t]==2) ini[i,t] <- 4
+      if(ch[i,t]==3&age[i,t]==3) ini[i,t] <- 4
+      if(ch[i,t]==4&age[i,t]==4) ini[i,t] <- 4
+      if(ch[i,t]==2&age[i,t]==3) ini[i,t] <- 3
+    }
+  }
+  ini[which(is.na(ini))] <- age[which(is.na(ini))]
+  for (i in 1:nrow(ch)){
+    ini[i,f[i]] <- NA
+    for (t in f[i]:(ncol(ch)-1)){
+      if(ini[i,t]==4 & ini[i,t+1]==3) ini[i,t+1] <- 4
+    }
+  }
+  return(ini)
+}
+
+inits <- function(){list(mean.phi1 = runif(1, 0, 1), mean.phi2 = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.alpha1 = runif(1, 0, 1), mean.alpha2 = runif(1, 0, 1), mean.pNB = runif(1, 0, 1), mean.pB = runif(1, 0, 1), z = agefirst.init(rCH, f))}
 
 #Parameters monitored
 params <- c("mean.phi1", "mean.phi2", "mean.phiad", "mean.alpha1", "mean.alpha2", "mean.pNB", "mean.pB")
@@ -733,6 +775,7 @@ agefirst <- jags(data  = jags.data,
 print(agefirst, digits = 3)
 
 k<-mcmcplots::as.mcmc.rjags(agefirst)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+#rhat= 1.01, decent convergence 
 
 #Create plot
 par(mfrow = c(3, 3), las = 1)
@@ -751,16 +794,17 @@ hist(agefirst$BUGSoutput$sims.list$mean.pNB, col = "gray", main = "", xlab = exp
 abline(v = p.NB, col = "red", lwd = 2)
 hist(agefirst$BUGSoutput$sims.list$mean.pB, col = "gray", main = "", xlab = expression(p[B]) , ylab = "")
 abline(v = p.B, col = "red", lwd = 2)
+mtext("Figure 9.6", side= 3, line= -1.5, outer= T) #adding main title to multiplot
 #-------------------------------------------------------------------------------
 
 # 9.5 Joint Analysis of Capture-Recapture and Mark-Recovery Data
 # 9.5.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
 #Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
-s <- 0.8
-F <- 0.6
-r <- 0.1
-p <- 0.5
+s <- 0.8 #adult survival
+F <- 0.6 #study site fidelity
+r <- 0.1 #recovery probability
+p <- 0.5 #resight probability
 n.occasions <- 10
 n.states <- 4
 n.obs <- 3
@@ -888,12 +932,12 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
-      z[i,t] ~ dcat(ps[z[i,t−1], i, t−1,])
+      z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
       #Observation process: draw O(t) given S(t)
-      y[i,t] ~ dcat(po[z[i,t], i, t−1,])
+      y[i,t] ~ dcat(po[z[i,t], i, t-1,])
     } 
   } 
 }
@@ -901,19 +945,42 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Bundle data
 jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1])
 
-#Initial values (note: function ch.init is defined in section 7.3)
-inits <- function(){list(mean.s = runif(1, 0, 1), mean.f = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.r = runif(1, 0, 1), z = ch.init(CH, f))}
+#Initial values (note: function ld.init is created for JAGS and from vogelwarte.ch)
+ld.init <- function(ch, f){
+  ch[ch==3] <- NA
+  v2 <- which(ch==2, arr.ind = T)
+  ch[v2] <- 3
+  for (i in 1:nrow(v2)){
+    ifelse(v2[i,2]!=ncol(ch), ch[v2[i,1], (v2[i,2]+1):ncol(ch)] <- 4, next)}
+  for (i in 1:nrow(ch)){
+    m <- max(which(ch[i,]==1))
+    ch[i,f[i]:m] <- 1
+  }
+  for (i in 1:nrow(v2)){
+    u1 <- min(which(ch[v2[i,1],]==1))
+    ch[v2[i],u1:(v2[i,2]-1)] <- 1
+  }
+  for (i in 1:nrow(ch)){
+    for (j in f[i]:ncol(ch)){
+      if(is.na(ch[i,j])==1) ch[i,j] <- 1
+    }
+    ch[i,f[i]] <- NA
+  }
+  return(ch)
+}
 
-#Parameters monitored
+inits <- function(){list(mean.s = runif(1, 0, 1), mean.f = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.r = runif(1, 0, 1), z = ld.init(rCH, f))}  
+
+# Parameters monitored
 params <- c("mean.s", "mean.f", "mean.r", "mean.p")
 
-#MCMC settings
-ni <- 40000
-nt <- 10
-nb <- 10000
+# MCMC settings
+ni <- 4000
+nt <- 3
+nb <- 1000
 nc <- 3
 
-#Call JAGS from R
+# Call JAGS from R 
 lifedead <- jags(data  = jags.data,
                  inits = inits,
                  parameters.to.save = params,
@@ -923,7 +990,7 @@ lifedead <- jags(data  = jags.data,
                  n.iter = ni,
                  n.burnin = nb)
 
-print(lifedead, digits = 3)
+print(lifedead, digit = 3)
 
 k<-mcmcplots::as.mcmc.rjags(lifedead)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 #-------------------------------------------------------------------------------
@@ -932,10 +999,10 @@ k<-mcmcplots::as.mcmc.rjags(lifedead)%>%as.shinystan()%>%launch_shinystan() #mak
 # 9.6.2 Generation of Simulated Data
 #-------------------------------------------------------------------------------
 #Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
-phiA <- 0.85
-phiB <- 0.75
-phiC <- 0.65
-psiAB <- 0.3
+phiA <- 0.85 
+phiB <- 0.75 
+phiC <- 0.65 
+psiAB <- 0.3 
 psiAC <- 0.2
 psiBA <- 0.5
 psiBC <- 0.1
@@ -1103,7 +1170,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Likelihood
   for (i in 1:nind){
     #Define latent state at first capture
-    z[i,f[i]] <- Y[i,f[i]]
+    z[i,f[i]] <- y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State process: draw S(t) given S(t−1)
       z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
@@ -1235,12 +1302,12 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Likelihood
 for (i in 1:nind){
   #Define latent state at first capture
-  z[i,f[i]] <- Y[i,f[i]]
+  z[i,f[i]] <- y[i,f[i]]
   for (t in (f[i]+1):n.occasions){
     #State process: draw S(t) given S(t−1)
-    z[i,t] ~ dcat(ps[z[i,t−1], i, t−1,])
+    z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
     #Observation process: draw O(t) given S(t)
-    y[i,t] ~ dcat(po[z[i,t], i, t−1,])
+    y[i,t] ~ dcat(po[z[i,t], i, t-1,])
   } 
 } 
 }
@@ -1249,26 +1316,35 @@ for (i in 1:nind){
 jags.data <- list(y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1], z = known.state.ms(rCH, 3))
 
 #Initial values
-inits <- function(){list(s = runif((dim(rCH)[2]-1),0,1), z = ms.init.z(rCH, f))}
+ms.init.z <- function(ch, f){
+  for (i in 1:dim(ch)[1]){ch[i,1:f[i]] <- NA}
+  states <- max(ch, na.rm = TRUE)
+  v <- which(ch==states)
+  ch[-v] <- NA
+  ch[v] <- states
+  return(ch)
+}
 
-#Parameters monitored
-parameters <- c("s", "psiV", "psiF", "psiD")
+inits <- function(){list(s = runif((dim(rCH)[2]-1), 0, 1), z = ms.init.z(rCH, f))}
 
-#MCMC settings
+# Parameters monitored
+params <- c("s", "psiV", "psiF", "psiD")
+
+# MCMC settings
 ni <- 5000
 nt <- 3
 nb <- 2000
 nc <- 3
 
-#Call JAGS from R
+# Call JAGS from R (BRT 3 min)
 ls <- jags(data  = jags.data,
-                 inits = inits,
-                 parameters.to.save = params,
-                 model.file = jags.model.txt,
-                 n.chains = nc,
-                 n.thin= nt,
-                 n.iter = ni,
-                 n.burnin = nb)
+            inits = inits,
+            parameters.to.save = params,
+            model.file = jags.model.txt,
+            n.chains = nc,
+            n.thin= nt,
+            n.iter = ni,
+            n.burnin = nb)
 
 print(ls, digits = 3)
 
