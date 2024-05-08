@@ -657,7 +657,7 @@ jags.js-tempran.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   Nsuper <- sum(Nalive[]) #Size of superpopulation
 }
 
-leis <- as.matrix(read.table("leisleri.txt", sep = " ", header = FALSE))
+leis <- as.matrix(read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/leisleri.txt", sep = " ", header = FALSE))
 nz <- 300
 CH.aug <- rbind(leis, matrix(0, ncol = dim(leis)[2], nrow = nz))
 
