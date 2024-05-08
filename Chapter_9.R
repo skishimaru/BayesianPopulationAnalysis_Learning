@@ -789,7 +789,7 @@ hist(agefirst$BUGSoutput$sims.list$mean.alpha1, col = "gray", main = "", xlab = 
 abline(v = alpha.1, col = "red", lwd = 2)
 hist(agefirst$BUGSoutput$sims.list$mean.alpha2, col = "gray", main = "", xlab = expression(alpha[2]) , ylab = "")
 abline(v = alpha.2, col = "red", lwd = 2)
-plot(0, type = "n", axes = F, ylab = "", xlab = "")
+plot(0, type='n', axes=FALSE, xlab = "", ylab = "") #Blank plot, for aesthetic 
 hist(agefirst$BUGSoutput$sims.list$mean.pNB, col = "gray", main = "", xlab = expression(p[NB]))
 abline(v = p.NB, col = "red", lwd = 2)
 hist(agefirst$BUGSoutput$sims.list$mean.pB, col = "gray", main = "", xlab = expression(p[B]) , ylab = "")
