@@ -5,8 +5,6 @@ library(R2jags) #to run JAGS
 library(shinystan) #to run shiny stan
 library(tidyverse) #to utilize pipe operators
 
-#NOTE: These examples are only written in state space formulation and not multinominal likelihood because WinBUGS does not have matrix-multiplication (but JAGS does)
-
 # 10.3 Fitting the JS Model with Data Augmentation
 # 10.3.1 The JS Model as a Restricted Dynamic Occupancy Model
 #-------------------------------------------------------------------------------
