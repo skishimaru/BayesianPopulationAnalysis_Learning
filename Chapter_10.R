@@ -344,6 +344,19 @@ k<-mcmcplots::as.mcmc.rjags(js.occ)%>%as.shinystan()%>%launch_shinystan() #makin
 #Add dummy occasion
 CH.du <- cbind(rep(0, dim(CH)[1]), CH)
 
+# Code to fix error from: https://groups.google.com/g/hmecology/c/S4HO-tnzep8?pli=1 START
+my.z.init <- CH.du
+
+first.one <- apply(my.z.init[,1:ncol(CH.du)], 1, function(x) min(which(x == 1)))
+last.one  <- apply(my.z.init[,1:ncol(CH.du)], 1, function(x) max(which(x == 1)))
+
+for(i in 1:nrow(my.z.init)) {
+  my.z.init[i,     first.one[i]  : last.one[i]        ] = 2
+  if(first.one[i] > 1)               my.z.init[i,                1  : (first.one[i] - 1) ] = 1
+  if(last.one[i]  < ncol(my.z.init)) my.z.init[i, (last.one[i] + 1) : ncol(my.z.init)    ] = 3
+}
+# Code to fix error from: https://groups.google.com/g/hmecology/c/S4HO-tnzep8?pli=1 END
+
 #Augment data
 nz <- 500
 CH.ms <- rbind(CH.du, matrix(0, ncol = dim(CH.du)[2], nrow = nz))
@@ -351,36 +364,18 @@ CH.ms <- rbind(CH.du, matrix(0, ncol = dim(CH.du)[2], nrow = nz))
 #Recode CH matrix: a 0 is not allowed in WinBUGS!
 CH.ms[CH.ms==0] <- 2 #Not seen = 2, seen = 1
 
+#Code to fix error from: https://groups.google.com/g/hmecology/c/S4HO-tnzep8?pli=1
+my.z.init.ms <- rbind(my.z.init, matrix(0, ncol = dim(my.z.init)[2], nrow = nz))
+my.z.init.ms[my.z.init.ms==0] <- 1
+
 #Bundle data
 jags.data <- list(y = CH.ms, n.occasions = dim(CH.ms)[2], M = dim(CH.ms)[1])
 
-#Initial values from vogelwarte.ch
-#As always in JAGS, good initial values need to be specified for the latent state z. They need to correspond to the true state, which is not the same as the observed state. Thus, we have given initial values of "1" for the latent state at all places before an individual was observed, an initial value of "2" at all places when the individual was observed alive or known to be alive and an initial value of "3" at all places after the last observation. The folllowing function creates the initial values.
-js.multistate.init <- function(ch, nz){
-  ch[ch==2] <- NA
-  state <- ch
-  for (i in 1:nrow(ch)){
-    n1 <- min(which(ch[i,]==1))
-    n2 <- max(which(ch[i,]==1))
-    state[i,n1:n2] <- 2
-  }
-  state[state==0] <- NA
-  get.first <- function(x) min(which(!is.na(x)))
-  get.last <- function(x) max(which(!is.na(x)))   
-  f <- apply(state, 1, get.first)
-  l <- apply(state, 1, get.last)
-  for (i in 1:nrow(ch)){
-    state[i,1:f[i]] <- 1
-    if(l[i]!=ncol(ch)) state[i, (l[i]+1):ncol(ch)] <- 3
-    state[i, f[i]] <- 2
-  }   
-  state <- rbind(state, matrix(1, ncol = ncol(ch), nrow = nz))
-  return(state)
-}
+inits <- function(){list(mean.phi = runif(1, 0, 1), #Code to fix error from: https://groups.google.com/g/hmecology/c/S4HO-tnzep8?pli=1
+                         mean.p = runif(1, 0, 1),
+                         z = cbind(rep(NA, dim(my.z.init.ms)[1]), my.z.init.ms[,-1]))}
 
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = js.multistate.init(CH.du, nz))}
-
-# Parameters monitored
+#Parameters monitored
 params <- c("mean.p", "mean.phi", "b", "Nsuper", "N", "B")
 
 # MCMC settings
@@ -472,7 +467,7 @@ for (t in 1:n.occasions){
 time <- 1:n.occasions
 plot(x = time-0.25, y = js.occ$BUGSoutput$mean$b, xlab = "", ylab = "Entry probability", frame = FALSE, las = 1, xlim = c(0.5, 7.5), pch = 16, ylim = c(0, max(c(b1.upper, b2.upper))))
 segments(time-0.25, b1.lower, time-0.25, b1.upper)
-points(x = time, y = js.ms$BUGSoutput$mean$b, pch = 1)
+points(x = time, y = js.ms$BUGSoutput$mean$b[1:7], pch = 1)
 segments(time, b2.lower, time, b2.upper)
 points(x = time+0.25, y = js.super$BUGSoutput$mean$b, pch = 17)
 segments(time+0.25, b3.lower, time+0.25, b3.upper)
