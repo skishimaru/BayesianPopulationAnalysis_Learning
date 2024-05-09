@@ -9,7 +9,7 @@ library(tidyverse) #to utilize pipe operators
 # 10.3.1 The JS Model as a Restricted Dynamic Occupancy Model
 #-------------------------------------------------------------------------------
 #Specify model in JAGS
-jags.js-rest.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+jags.js.rest.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #Priors and constraints
   for (i in 1:M){
     for (t in 1:(n.occasions-1)){
@@ -78,7 +78,7 @@ jags.js-rest.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 # 10.3.2 The JS Model as a Multistate Model
 #-------------------------------------------------------------------------------
 #Specify model in JAGS
-jags.js-ms.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+jags.js.ms.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #-----------------------------------
   #Parameters:
@@ -174,7 +174,7 @@ jags.js-ms.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 # 10.3.3 The Superpopulation Parameterization
 #-------------------------------------------------------------------------------
 #Specify model in JAGS
-jags.js-super.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+jags.js.super.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Priors and constraints
   for (i in 1:M){
@@ -309,8 +309,11 @@ CH.aug <- rbind(CH, matrix(0, ncol = dim(CH)[2], nrow = nz))
 #Bundle data
 jags.data <- list(y = CH.aug, n.occasions = dim(CH.aug)[2], M = dim(CH.aug)[1])
 
-#Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = CH.aug)}
+#Initial values from vogelwarte.ch
+#Good initial values for the latent state z are needed to run the model in JAGS. The simplest option that works is to give just a matrix with a 1 at all places.
+z.init <- CH.aug
+z.init[z.init==0] <- 1
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = z.init)}  
 
 #Parameters monitored
 params <- c("psi", "mean.p", "mean.phi", "b", "Nsuper", "N", "B", "gamma")
@@ -325,7 +328,7 @@ nc <- 3
 js.occ <- jags(data  = jags.data,
            inits = inits,
            parameters.to.save = params,
-           model.file = jags.js-rest.txt,
+           model.file = jags.js.rest.txt,
            n.chains = nc,
            n.thin= nt,
            n.iter = ni,
@@ -348,11 +351,34 @@ CH.ms <- rbind(CH.du, matrix(0, ncol = dim(CH.du)[2], nrow = nz))
 #Recode CH matrix: a 0 is not allowed in WinBUGS!
 CH.ms[CH.ms==0] <- 2 #Not seen = 2, seen = 1
 
-# Bundle data
+#Bundle data
 jags.data <- list(y = CH.ms, n.occasions = dim(CH.ms)[2], M = dim(CH.ms)[1])
 
-# Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = cbind(rep(NA, dim(CH.ms)[1]), CH.ms[,-1]))}
+#Initial values from vogelwarte.ch
+#As always in JAGS, good initial values need to be specified for the latent state z. They need to correspond to the true state, which is not the same as the observed state. Thus, we have given initial values of "1" for the latent state at all places before an individual was observed, an initial value of "2" at all places when the individual was observed alive or known to be alive and an initial value of "3" at all places after the last observation. The folllowing function creates the initial values.
+js.multistate.init <- function(ch, nz){
+  ch[ch==2] <- NA
+  state <- ch
+  for (i in 1:nrow(ch)){
+    n1 <- min(which(ch[i,]==1))
+    n2 <- max(which(ch[i,]==1))
+    state[i,n1:n2] <- 2
+  }
+  state[state==0] <- NA
+  get.first <- function(x) min(which(!is.na(x)))
+  get.last <- function(x) max(which(!is.na(x)))   
+  f <- apply(state, 1, get.first)
+  l <- apply(state, 1, get.last)
+  for (i in 1:nrow(ch)){
+    state[i,1:f[i]] <- 1
+    if(l[i]!=ncol(ch)) state[i, (l[i]+1):ncol(ch)] <- 3
+    state[i, f[i]] <- 2
+  }   
+  state <- rbind(state, matrix(1, ncol = ncol(ch), nrow = nz))
+  return(state)
+}
+
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = js.multistate.init(CH.du, nz))}
 
 # Parameters monitored
 params <- c("mean.p", "mean.phi", "b", "Nsuper", "N", "B")
@@ -367,7 +393,7 @@ nc <- 3
 js.ms <- jags(data  = jags.data,
                inits = inits,
                parameters.to.save = params,
-               model.file = jags.js-ms.txt,
+               model.file = jags.js.ms.txt,
                n.chains = nc,
                n.thin= nt,
                n.iter = ni,
@@ -388,8 +414,12 @@ CH.aug <- rbind(CH, matrix(0, ncol = dim(CH)[2], nrow = nz))
 jags.data <- list(y = CH.aug, n.occasions = dim(CH.aug)[2], M = dim(CH.aug)[1])
 
 #Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), psi = runif(1, 0, 1), z = CH.aug)}
+#Good initial values for the latent state z are needed to run the model in JAGS. The simplest option that works is to give just a matrix with a 1 at all places. Moreover, initial values for the inclusion parameter w should also be given, the simplest option is to provide a vector with 1's.
+z.init <- CH.aug
+z.init[z.init==0] <- 1
+w.init <- rep(1, nrow(CH.aug))
 
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), psi = runif(1, 0, 1), w = w.init, z = z.init)}  
 # Parameters monitored
 params <- c("psi", "mean.p", "mean.phi", "b", "Nsuper", "N", "B", "nu")
 
@@ -403,7 +433,7 @@ nc <- 3
 js.super <- jags(data  = jags.data,
               inits = inits,
               parameters.to.save = params,
-              model.file = jags.js-super.txt,
+              model.file = jags.js.super.txt,
               n.chains = nc,
               n.thin= nt,
               n.iter = ni,
@@ -469,7 +499,7 @@ sim <- simul.js(PHI, P, b, N)
 CH <- sim$CH
 
 #Specify model in JAGS
-jags.js-super-indran.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+jags.js.super.indran.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Priors and constraints
   for (i in 1:M){
@@ -555,7 +585,11 @@ CH.aug <- rbind(CH, matrix(0, ncol = dim(CH)[2], nrow = nz))
 jags.data <- list(y = CH.aug, n.occasions = dim(CH.aug)[2], M = dim(CH.aug)[1])
 
 #Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), sigma = runif(1, 0, 1), z = CH.aug)}
+#Good initial values for the latent state z are needed to run the model in JAGS. The simplest option that works is to give just a matrix with a 1 at all places. Moreover, initial values for the inclusion parameter w should also be given, the simplest option is to provide a vector with 1's.
+z.init <- CH.aug
+z.init[z.init==0] <- 1
+w.init <- rep(1, nrow(CH.aug))
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), sigma = runif(1, 0, 1), w = w.init, z = z.init)}  
 
 #Parameters monitored
 params <- c("sigma2","psi", "mean.p", "mean.phi", "N", "Nsuper", "b", "B")
@@ -570,7 +604,7 @@ nc <- 3
 js.ran <- jags(data  = jags.data,
               inits = inits,
               parameters.to.save = params,
-              model.file = jags.js-super-indran.txt,
+              model.file = jags.js.super.indran.txt,
               n.chains = nc,
               n.thin= nt,
               n.iter = ni,
@@ -584,7 +618,7 @@ k<-mcmcplots::as.mcmc.rjags(js.ran)%>%as.shinystan()%>%launch_shinystan() #makin
 # 10.7 Analysis of a Real Data Set: Survival, Recruitment and Population Size of Leisler's Bats
 #-------------------------------------------------------------------------------
 #Specify model in JAGS
-jags.js-tempran.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
+jags.js.tempran.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Priors and constraints
   for (i in 1:M){
@@ -662,13 +696,16 @@ nz <- 300
 CH.aug <- rbind(leis, matrix(0, ncol = dim(leis)[2], nrow = nz))
 
 #Bundle data
-bugs.data <- list(y = CH.aug, n.occasions = dim(CH.aug)[2], M = dim(CH.aug)[1])
+jags.data <- list(y = CH.aug, n.occasions = dim(CH.aug)[2], M = dim(CH.aug)[1])
 
 #Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), sigma = runif(1, 0, 1), z = CH.aug)}
+#Good initial values for the latent state z are needed to run the model in JAGS. The simplest option that works is to give just a matrix with a 1 at all places.
+z.init <- CH.aug
+z.init[z.init==0] <- 1
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.p = runif(1, 0, 1), sigma = runif(1, 0, 1), z = z.init)} 
 
 #Parameters monitored
-parameters <- c("psi", "mean.p", "sigma2", "mean.phi", "N", "Nsuper", "b", "B")
+params <- c("psi", "mean.p", "sigma2", "mean.phi", "N", "Nsuper", "b", "B")
 
 #MCMC settings
 ni <- 10000
@@ -680,7 +717,7 @@ nc <- 3
 n1 <- jags(data  = jags.data,
                inits = inits,
                parameters.to.save = params,
-               model.file = jags.jstempran.txt,
+               model.file = jags.js.tempran.txt,
                n.chains = nc,
                n.thin= nt,
                n.iter = ni,
@@ -693,16 +730,16 @@ k<-mcmcplots::as.mcmc.rjags(n1)%>%as.shinystan()%>%launch_shinystan() #making it
 #Code to produce Fig. 10.6
 #Calculate per-capita recruitment
 T <- dim(leis)[2]
-f <- matrix(NA, ncol = T, nrow = length(nl$BUGSoutput$sims.list$B[,1]))
+f <- matrix(NA, ncol = T, nrow = length(n1$BUGSoutput$sims.list$B[,1]))
 for (t in 1:(T-1)){
-  f[,t] <- nl$BUGSoutput$sims.list$B[,t+1] / nl$BUGSoutput$sims.list$N[,t+1]
+  f[,t] <- n1$BUGSoutput$sims.list$B[,t+1] / n1$BUGSoutput$sims.list$N[,t+1]
 }
 
 n.lower <- n.upper <- f.lower <- f.upper <- f.mean <- numeric()
 
 for (t in 1:T){
-  n.lower[t] <- quantile(nl$BUGSoutput$sims.list$N[,t], 0.025)
-  n.upper[t] <- quantile(nl$BUGSoutput$sims.list$N[,t], 0.975)
+  n.lower[t] <- quantile(n1$BUGSoutput$sims.list$N[,t], 0.025)
+  n.upper[t] <- quantile(n1$BUGSoutput$sims.list$N[,t], 0.975)
 }
 for (t in 1:(T-1)){
   f.lower[t] <- quantile(f[,t], 0.025)
@@ -710,12 +747,12 @@ for (t in 1:(T-1)){
   f.mean[t] <- mean(f[,t])
 }
 par(mfrow = c(1, 2))
-plot(nl$BUGSoutput$mean$N, type = "b", pch = 19, ylab = "Population size", xlab = "", axes = F, cex = 1.5, ylim = c(10, max(n.upper)))
+plot(n1$BUGSoutput$mean$N, type = "b", pch = 19, ylab = "Population size", xlab = "", cex = 1.5, ylim = c(10, max(n.upper)), xaxt= "none")
 axis(1, at = seq(1, T, 2), labels = seq(1990, 2008, 2))
 axis(1, at = 1:T, labels = rep("", T), tcl = -0.25)
 axis(2, las = 1)
 segments(1:T, n.lower, 1:T, n.upper)
-plot(f.mean, type = "b", pch = 19, ylab = "Local per capita recruitment", xlab = "", axes = F, cex = 1.5, ylim = c(0, 0.8))
+plot(f.mean, type = "b", pch = 19, ylab = "Local per capita recruitment", xlab = "", axes = F, cex = 1.5, ylim = c(0, 0.8), xaxt= "none")
 axis(1, at = seq(1, (T-1), 2), labels = seq(1991, 2008, 2))
 axis(1, at = 1:(T-1), labels = rep("", T-1), tcl = -0.25)
 axis(2, las = 1)
