@@ -38,6 +38,8 @@ R <- c(21, 28, 26, 38, 35, 33, 31, 30, 33)
 
 # 11.3.2 Analysis of the Model
 #-------------------------------------------------------------------------------
+#NOTE: might get errors, but just re-run the model
+#Code from www.vogelwarte.ch
 #Specify model in BUGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
@@ -59,8 +61,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   sigma2.y <- (sigma.y*sigma.y)
   
   #Initial population sizes
-  N1[1] ~ dnorm(100, 0.0001);T(0,) #1-year
-  Nad[1] ~ dnorm(100, 0.0001);T(0,) #Adults
+  n1 ~ dnorm(25, tauy);T(0,)     #1-year
+  nad ~ dnorm(25, tauy);T(0,)    #Adults
+  N1[1] <- round(n1)
+  Nad[1] <- round(nad)
   
   #Survival and recapture probabilities, as well as productivity
   for (t in 1:(nyears-1)){
@@ -87,16 +91,16 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #-----------------------------------------------
   # 3.1. Likelihood for population population count data (state-space model)
   # 3.1.1 System process
-for (t in 2:nyears){
-  mean1[t] <- f[t-1] / 2 * sjuv[t-1] * Ntot[t-1]
-  N1[t] ~ dpois(mean1[t])
-  Nad[t] ~ dbin(sad[t-1], Ntot[t-1])
-}
-for (t in 1:nyears){
-  Ntot[t] <- Nad[t] + N1[t]
-}
+  for (t in 2:nyears){
+    mean1[t] <- f[t-1] / 2 * sjuv[t-1] * Ntot[t-1]
+    N1[t] ~ dpois(mean1[t])
+    Nad[t] ~ dbin(sad[t-1], Ntot[t-1])
+  }
+  for (t in 1:nyears){
+    Ntot[t] <- Nad[t] + N1[t]
+  }
   
-  #3.1.2 Observation process
+  # 3.1.2 Observation process
   for (t in 1:nyears){
     y[t] ~ dnorm(Ntot[t], tauy)
   }
@@ -107,43 +111,38 @@ for (t in 1:nyears){
     m[t,1:nyears] ~ dmulti(pr[t,], r[t])
   }
   
-  #Calculate the number of released individuals
-  for (t in 1:2*(nyears-1)){
-    r[t] <- sum(m[t,])
-  }
-  
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
-    #Main diagonal
+    # Main diagonal
     q[t] <- 1-p[t]
     pr[t,t] <- sjuv[t] * p[t]
-    #Above main diagonal
+    # Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t,j] <- sjuv[t]*prod(sad[(t+1):j])*prod(q[t:(j-1)])*p[j]
-    } 
-    #Below main diagonal
+    } #j	
+    # Below main diagonal
     for (j in 1:(t-1)){
       pr[t,j] <- 0
-    } 
-    #Last column: probability of non-recapture
+    } #j
+    # Last column: probability of non-recapture
     pr[t,nyears] <- 1-sum(pr[t,1:(nyears-1)])
-  } 
+  } #t
   
   #m-array cell probabilities for adults
   for (t in 1:(nyears-1)){
-    #Main diagonal
+    # Main diagonal
     pr[t+nyears-1,t] <- sad[t] * p[t]
-    #Above main diagonal
+    # Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t+nyears-1,j] <- prod(sad[t:j])*prod(q[t:(j-1)])*p[j]
-    } 
-    #Below main diagonal
+    } #j
+    # Below main diagonal
     for (j in 1:(t-1)){
       pr[t+nyears-1,j] <- 0
-    } 
-    #Last column
+    } #j
+    # Last column
     pr[t+nyears-1,nyears] <- 1 - sum(pr[t+nyears-1,1:(nyears-1)])
-  } 
+  } #t
   
   #3.3. Likelihood for productivity data: Poisson regression
   for (t in 1:(nyears-1)){
@@ -153,13 +152,10 @@ for (t in 1:nyears){
 }
 
 #Bundle data
-jags.data <- list(m = m, y = y, J = J, R = R, nyears = dim(m)[2])
+jags.data <- list(m = m, y = y, J = J, R = R, nyears = dim(m)[2], r = rowSums(m))
 
 #Initial values
-inits <- function(){list(mean.sjuv = runif(1, 0, 1), mean.sad = runif
-                         (1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10),
-                         N1 = rpois(dim(m)[2], 30), Nad = rpois(dim(m)[2], 30), sigma.y = runif
-                         (1, 0, 10))}
+inits <- function(){list(mean.sjuv = runif(1, 0, 1), mean.sad = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10), sigma.y = runif(1, 0, 1), n1 = rpois(1, 30), nad = rpois(1, 30))}
 
 #Parameters monitored
 params <- c("mean.sjuv", "mean.sad", "mean.p", "mean.fec", "N1","Nad", "Ntot", "lambda", "sigma2.y")
@@ -191,16 +187,18 @@ for (i in 1:10){
   lower[i] <- quantile(ipm$BUGSoutput$sims.list$Ntot[,i], 0.025)
   upper[i] <- quantile(ipm$BUGSoutput$sims.list$Ntot[,i], 0.975)
 }
-plot(ipm$mean$Ntot, type = "b", ylim = c(35, 65), ylab = "Population size",
+plot(ipm$BUGSoutput$mean$Ntot, type = "b", ylim = c(35, 65), ylab = "Population size",
      xlab = "Year", las = 1, pch = 16, col = "blue", frame = F, cex = 1.5)
 segments(1:10, lower, 1:10, upper, col = "blue")
 points(y, type = "b", col = "black", pch = 16, lty = 2, cex = 1.5)
 legend(x = 1, y = 65, legend = c("Counts", "Estimates"), pch = c(16, 16),
        col = c("black", "blue"), lty = c(2, 1), bty = "n")
+mtext("Figure 11.4", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
 
 # 11.4 Another Example of an IPM: Estimating Productivity Without Explicit Productivity Data
 #-------------------------------------------------------------------------------
+#Code from www.vogelwarte.ch
 #Specify model in BUGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
@@ -222,8 +220,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   sigma2.y <- (sigma.y*sigma.y)
   
   #Initial population sizes
-  N1[1] ~ dnorm(100, 0.0001);T(0,) #1-year
-  Nad[1] ~ dnorm(100, 0.0001);T(0,) #Adults
+  n1[1] ~ dnorm(25, tauy);T(0,) #1-year
+  nad[1] ~ dnorm(25, tauy);T(0,) #Adults
+  N1[1] <- round(n1)
+  Nad[1] <- round(nad)
   
   #Survival and recapture probabilities, as well as productivity
   for (t in 1:(nyears-1)){
@@ -270,11 +270,6 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     m[t,1:nyears] ~ dmulti(pr[t,], r[t])
   }
   
-  #Calculate the number of released individuals
-  for (t in 1:2*(nyears-1)){
-    r[t] <- sum(m[t,])
-  }
-  
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
     #Main diagonal
@@ -310,11 +305,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-jags.data <- list(m = m, y = y, nyears = dim(m)[2])
+jags.data <- list(m = m, y = y, nyears = dim(m)[2], r = rowSums(m))
 
 #Initial values
-inits <- function(){list(mean.sjuv = runif(1, 0, 1), mean.sad = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10), 
-                         N1 = rpois(dim(m)[2], 30), Nad = rpois(dim(m)[2], 30), sigma.y = runif(1, 0, 10))}
+inits <- function(){list(mean.sjuv= runif(1, 0, 1), mean.sad = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10), n1 = rpois(1, 30), nad = rpois(1, 30), sigma.y = runif(1, 0, 10))}
 
 #Parameters monitored
 params <- c("mean.sjuv", "mean.sad", "mean.p", "mean.fec", "N1", "Nad", "Ntot", "lambda", "sigma2.y")
@@ -363,8 +357,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   sigma2.y <- (sigma.y*sigma.y)
   
   #Initial population sizes
-  N1[1] ~ dnorm(100, 0.0001);T(0,) #1-year
-  Nad[1] ~ dnorm(100, 0.0001);T(0,) #Adults
+  n1 ~ dnorm(25, tauy);T(0,)     #1-year
+  nad ~ dnorm(25, tauy);T(0,)    #Adults
+  N1[1] <- round(n1)
+  Nad[1] <- round(nad)
   
   #Survival and recapture probabilities, as well as productivity
   for (t in 1:(nyears-1+t.pred)){
@@ -391,12 +387,12 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   # -----------------------------------------------
   #3.1. Likelihood for population population count data (state-space model)
   #3.1.1 System process
-  for (t in 2:nyears+t.pred){
+  for (t in 2:(nyears+t.pred)){
     mean1[t] <- f[t-1] / 2 * sjuv[t-1] * Ntot[t-1]
     N1[t] ~ dpois(mean1[t])
     Nad[t] ~ dbin(sad[t-1], Ntot[t-1])
   }
-  for (t in 1:nyears+t.pred){
+  for (t in 1:(nyears+t.pred)){
     Ntot[t] <- Nad[t] + N1[t]
   }
   
@@ -411,43 +407,39 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     m[t,1:nyears] ~ dmulti(pr[t,], r[t])
   }
   
-  #Calculate the number of released individuals
-  for (t in 1:2*(nyears-1)){
-    r[t] <- sum(m[t,])
-  }
-  
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
-    #Main diagonal
+    # Main diagonal
     q[t] <- 1-p[t]
     pr[t,t] <- sjuv[t] * p[t]
-    #Above main diagonal
+    # Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t,j] <- sjuv[t]*prod(sad[(t+1):j])*prod(q[t:(j-1)])*p[j]
-    } 
-    #Below main diagonal
+    } #j	
+    # Below main diagonal
     for (j in 1:(t-1)){
       pr[t,j] <- 0
-    } 
-    #Last column: probability of non-recapture
+    } #j
+    # Last column: probability of non-recapture
     pr[t,nyears] <- 1-sum(pr[t,1:(nyears-1)])
-  } 
+  } #t
   
   #m-array cell probabilities for adults
   for (t in 1:(nyears-1)){
-    #Main diagonal
+    # Main diagonal
     pr[t+nyears-1,t] <- sad[t] * p[t]
-    #Above main diagonal
+    # Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t+nyears-1,j] <- prod(sad[t:j])*prod(q[t:(j-1)])*p[j]
-    } 
-    #Below main diagonal
+    } #j
+    # Below main diagonal
     for (j in 1:(t-1)){
       pr[t+nyears-1,j] <- 0
-    } 
-    #Last column
+    } #j
+    # Last column
     pr[t+nyears-1,nyears] <- 1 - sum(pr[t+nyears-1,1:(nyears-1)])
-  } 
+  } #t
+  
   
   #3.3. Likelihood for productivity data: Poisson regression
   for (t in 1:(nyears-1)){
@@ -460,11 +452,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 t.pred <- 5
 
 #Bundle data
-jags.data <- list(m = m, y = y, J = J, R = R, nyears = dim(m)[2], t.pred = t.pred)
+jags.data <- list(m = m, y = y, J = J, R = R, nyears = dim(m)[2], t.pred = t.pred, r = rowSums(m))
 
 #Initial values
-inits <- function(){list(mean.sjuv = runif(1, 0, 1), mean.sad = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10), 
-                         N1 = rpois(dim(m)[2]+ t.pred, 30), Nad = rpois(dim(m)[2]+ t.pred, 30), sigma.y = runif(1, 0, 10))}
+inits <- function(){list(mean.sjuv = runif(1, 0, 1), mean.sad = runif(1, 0, 1), mean.p = runif(1, 0, 1), mean.fec = runif(1, 0, 10), n1 = rpois(1, 30), nad = rpois(1, 30), sigma.y = runif(1, 0, 10))}
 
 #Parameters monitored
 params <- c("mean.sjuv", "mean.sad", "mean.p", "mean.fec", "N1", "Nad", "Ntot", "lambda", "sigma2.y")
@@ -496,10 +487,11 @@ for (i in 1:15){
   lower[i] <- quantile(ipm.pred$BUGSoutput$sims.list$Ntot[,i], 0.025)
   upper[i] <- quantile(ipm.pred$BUGSoutput$sims.list$Ntot[,i], 0.975)
 }
-plot(ipm.pred$mean$Ntot, type = "b", ylim = c(10, max(upper)), ylab = "Population size", xlab = "Year", las = 1, pch = 16, col = "blue", frame = F)
+plot(ipm.pred$BUGSoutput$mean$Ntot, type = "b", ylim = c(10, max(upper)), ylab = "Population size", xlab = "Year", las = 1, pch = 16, col = "blue", frame = F)
 segments(1:15, lower, 1:15, upper, col = "blue")
 points(y, type = "b", col = "black", lty = 2, pch = 16)
 legend(x = 1, y = 80, legend = c("Counts", "Estimates"), pch = c(16, 16), col = c("black", "blue"), lty = c(2, 1), bty = "n")
+mtext("Figure 11.5", side= 3, line= -1.5, outer= T) #adding main title
 
 mean(ipm.pred$BUGSoutput$sims.list$Ntot[,15]<30)
 #-------------------------------------------------------------------------------
@@ -543,16 +535,19 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   # 1. Define the priors for the parameters
   #---------------------------------------
   #Initial population sizes
-  N1[1] ~ dnorm(100, 0.0001);T(0,) #1-year old individuals
-  NadSurv[1] ~ dnorm(100, 0.0001);T(0,) #Adults >= 2 years
-  Nadimm[1] ~ dnorm(100, 0.0001);T(0,) #Immigrants
+  n1[1] ~ dnorm(100, 0.0001);T(0,) #1-year old individuals
+  nadSurv[1] ~ dnorm(100, 0.0001);T(0,) #Adults >= 2 years
+  nadimm[1] ~ dnorm(100, 0.0001);T(0,) #Immigrants
+  N1[1] <- round(n1)
+  NadSurv[1] <- round(nadSurv)
+  Nadimm[1] <- round(nadimm)
   
   #Mean demographic parameters (on appropriate scale)
-  l.mphij ~ dnorm(0, 0.0001);T(-10,10) # Bounded to help with convergence
-  l.mphia ~ dnorm(0, 0.0001);T(-10,10)
-  l.mfec ~ dnorm(0, 0.0001);T(-10,10)
-  l.mim ~ dnorm(0, 0.0001);T(-10,10)
-  l.p ~ dnorm(0, 0.0001);T(-10,10)
+  l.mphij ~ dnorm(0, 0.0001)
+  l.mphia ~ dnorm(0, 0.0001)
+  l.mfec ~ dnorm(0, 0.0001)
+  l.mim ~ dnorm(0, 0.0001)
+  l.p ~ dnorm(0, 0.0001)
   
   #Precision of standard deviations of temporal variability
   sig.phij ~ dunif(0, 10)
@@ -566,10 +561,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Distribution of error terms (bounded to help with convergence)
   for (t in 1:(nyears-1)){
-    epsilon.phij[t] ~ dnorm(0, tau.phij);T(-15,15)
-    epsilon.phia[t] ~ dnorm(0, tau.phia);T(-15,15)
-    epsilon.fec[t] ~ dnorm(0, tau.fec);T(-15,15)
-    epsilon.im[t] ~ dnorm(0, tau.im);T(-15,15)
+    epsilon.phij[t] ~ dnorm(0, tau.phij)	
+    epsilon.phia[t] ~ dnorm(0, tau.phia)
+    epsilon.fec[t] ~ dnorm(0, tau.fec)
+    epsilon.im[t] ~ dnorm(0, tau.im)
   }
   
   #-----------------------
@@ -623,12 +618,6 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     marray.a[t,1:nyears] ~ dmulti(pr.a[t,], r.a[t])
   }
   
-  #Calculate number of released individuals
-  for (t in 1:(nyears-1)){
-    r.j[t] <- sum(marray.j[t,])
-    r.a[t] <- sum(marray.a[t,])
-  }
-  
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
     q[t] <- 1-p[t]
@@ -670,13 +659,10 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 }
 
 #Bundle data
-jags.data <- list(nyears = nyears, marray.j = marray.j, marray.a = marray.a, y = popcount, J = J, R = R)
+jags.data <- list(nyears = nyears, marray.j = marray.j, marray.a = marray.a, y = popcount, J = J, R = R, r.j = rowSums(marray.j), r.a = rowSums(marray.a))
 
 #Initial values
-inits <- function(){list(l.mphij = rnorm(1, 0.2, 0.5), l.mphia = rnorm(1, 0.2, 0.5), l.mfec = rnorm(1, 0.2, 0.5), 
-                         l.mim = rnorm(1, 0.2, 0.5), l.p = rnorm(1, 0.2, 1), sig.phij = runif(1, 0.1, 10), 
-                         sig.phia = runif(1, 0.1, 10), sig.fec = runif(1, 0.1, 10), sig.im = runif(1, 0.1, 10), 
-                         N1 = round(runif(nyears, 1, 50), 0), NadSurv = round(runif(nyears, 5, 50), 0), Nadimm = round(runif(nyears, 1, 50), 0))}
+inits <- function(){list(l.mphij = rnorm(1, 0.2, 0.5), l.mphia = rnorm(1, 0.2, 0.5), l.mfec = rnorm(1, 0.2, 0.5), l.mim = rnorm(1, 0.2, 0.5), l.p = rnorm(1, 0.2, 1), sig.phij = runif(1, 0.1, 10), sig.phia = runif(1, 0.1, 10), sig.fec = runif(1, 0.1, 10), sig.im = runif(1, 0.1, 10), n1 = round(runif(1, 1, 50), 0), nadSurv = round(runif(1, 5, 50), 0), nadimm = round(runif(1, 1, 50), 0))}
 
 #Parameters monitored
 params <- c("phij", "phia", "f", "omega", "p", "lambda", "mphij",
