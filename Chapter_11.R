@@ -113,36 +113,36 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
-    # Main diagonal
+    #Main diagonal
     q[t] <- 1-p[t]
     pr[t,t] <- sjuv[t] * p[t]
-    # Above main diagonal
+    #Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t,j] <- sjuv[t]*prod(sad[(t+1):j])*prod(q[t:(j-1)])*p[j]
-    } #j	
-    # Below main diagonal
+    } 	
+    #Below main diagonal
     for (j in 1:(t-1)){
       pr[t,j] <- 0
-    } #j
-    # Last column: probability of non-recapture
+    } 
+    #Last column: probability of non-recapture
     pr[t,nyears] <- 1-sum(pr[t,1:(nyears-1)])
-  } #t
+  } 
   
   #m-array cell probabilities for adults
   for (t in 1:(nyears-1)){
-    # Main diagonal
+    #Main diagonal
     pr[t+nyears-1,t] <- sad[t] * p[t]
-    # Above main diagonal
+    #Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t+nyears-1,j] <- prod(sad[t:j])*prod(q[t:(j-1)])*p[j]
-    } #j
-    # Below main diagonal
+    } 
+    #Below main diagonal
     for (j in 1:(t-1)){
       pr[t+nyears-1,j] <- 0
-    } #j
-    # Last column
+    } 
+    #Last column
     pr[t+nyears-1,nyears] <- 1 - sum(pr[t+nyears-1,1:(nyears-1)])
-  } #t
+  } 
   
   #3.3. Likelihood for productivity data: Poisson regression
   for (t in 1:(nyears-1)){
@@ -336,6 +336,7 @@ k<-mcmcplots::as.mcmc.rjags(ipm.prod)%>%as.shinystan()%>%launch_shinystan() #mak
 
 # 11.5 IPMs for Population Viability Analysis
 #-------------------------------------------------------------------------------
+#Code from www.vogelwarte.ch
 #Specify model in BUGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
@@ -382,9 +383,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     lambda[t] <- Ntot[t+1] / Ntot[t]
   }
   
-  # -----------------------------------------------
+  #-----------------------------------------------
   # 3. The likelihoods of the single data sets
-  # -----------------------------------------------
+  #-----------------------------------------------
   #3.1. Likelihood for population population count data (state-space model)
   #3.1.1 System process
   for (t in 2:(nyears+t.pred)){
@@ -396,7 +397,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     Ntot[t] <- Nad[t] + N1[t]
   }
   
-  # 3.1.2 Observation process
+  #3.1.2 Observation process
   for (t in 1:nyears){
     y[t] ~ dnorm(Ntot[t], tauy)
   }
@@ -409,36 +410,36 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #m-array cell probabilities for juveniles
   for (t in 1:(nyears-1)){
-    # Main diagonal
+    #Main diagonal
     q[t] <- 1-p[t]
     pr[t,t] <- sjuv[t] * p[t]
-    # Above main diagonal
+    #Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t,j] <- sjuv[t]*prod(sad[(t+1):j])*prod(q[t:(j-1)])*p[j]
-    } #j	
-    # Below main diagonal
+    } 
+    #Below main diagonal
     for (j in 1:(t-1)){
       pr[t,j] <- 0
-    } #j
-    # Last column: probability of non-recapture
+    } 
+    #Last column: probability of non-recapture
     pr[t,nyears] <- 1-sum(pr[t,1:(nyears-1)])
-  } #t
+  } 
   
   #m-array cell probabilities for adults
   for (t in 1:(nyears-1)){
-    # Main diagonal
+    #Main diagonal
     pr[t+nyears-1,t] <- sad[t] * p[t]
-    # Above main diagonal
+    #Above main diagonal
     for (j in (t+1):(nyears-1)){
       pr[t+nyears-1,j] <- prod(sad[t:j])*prod(q[t:(j-1)])*p[j]
-    } #j
-    # Below main diagonal
+    } 
+    #Below main diagonal
     for (j in 1:(t-1)){
       pr[t+nyears-1,j] <- 0
-    } #j
-    # Last column
+    } 
+    #Last column
     pr[t+nyears-1,nyears] <- 1 - sum(pr[t+nyears-1,1:(nyears-1)])
-  } #t
+  } 
   
   
   #3.3. Likelihood for productivity data: Poisson regression
@@ -498,6 +499,7 @@ mean(ipm.pred$BUGSoutput$sims.list$Ntot[,15]<30)
 
 # 11.6 Real Data Example: Hoopoe Population Dynamics
 #-------------------------------------------------------------------------------
+#Code from www.vogelwarte.ch
 #Load data
 nyears <- 9 #Number of years
 
@@ -573,9 +575,9 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   for (t in 1:(nyears-1)){
     logit(phij[t]) <- l.mphij + epsilon.phij[t] #Juv. apparent survival
     logit(phia[t]) <- l.mphia + epsilon.phia[t] #Adult apparent survival
-    log(f[t]) <- l.mfec + epsilon.fec[t] # Productivity
-    log(omega[t]) <- l.mim + epsilon.im[t] # Immigration
-    logit(p[t]) <- l.p # Recapture probability
+    log(f[t]) <- l.mfec + epsilon.fec[t] #Productivity
+    log(omega[t]) <- l.mim + epsilon.im[t] #Immigration
+    logit(p[t]) <- l.p #Recapture probability
   }
   
   #-----------------------
@@ -595,8 +597,8 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   #-----------------------------------------
   # 4. The likelihoods of the single data sets
   #-----------------------------------------
-  # 4.1. Likelihood for population population count data (state-space model)
-  # 4.1.1 System process
+  #4.1. Likelihood for population population count data (state-space model)
+  #4.1.1 System process
   for (t in 2:nyears){
     mean1[t] <- 0.5 * f[t-1] * phij[t-1] * Ntot[t-1]
     N1[t] ~ dpois(mean1[t])
