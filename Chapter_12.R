@@ -185,28 +185,30 @@ k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making i
 
 #Plot posteriors
 par(mfrow = c(2, 2))
-hist(out$sims.list$alpha0, col = "gray", main = "", xlab = "alpha0", las = 1)
+hist(out$BUGSoutput$sims.list$alpha0, col = "gray", main = "", xlab = "alpha0", las = 1)
 abline(v = data$alpha0, lwd = 3, col = "red")
-hist(out$sims.list$alpha1, col = "gray", main = "", xlab = "alpha1", las = 1)
+hist(out$BUGSoutput$sims.list$alpha1, col = "gray", main = "", xlab = "alpha1", las = 1)
 abline(v = data$alpha1, lwd = 3, col = "red")
-hist(out$sims.list$beta0, col = "gray", main = "", xlab = "beta0", las=1)
+hist(out$BUGSoutput$sims.list$beta0, col = "gray", main = "", xlab = "beta0", las=1)
 abline(v = data$beta0, lwd = 3, col = "red")
-hist(out$sims.list$beta1, col = "gray", main = "", xlab = "beta1", las = 1)
+hist(out$BUGSoutput$sims.list$beta1, col = "gray", main = "", xlab = "beta1", las = 1)
 abline(v = data$beta1, lwd = 3, col = "red")
+mtext("Figure 12.2", side= 3, line= -1.5, outer= T) #adding main title
 
 #Plot predicted covariate relationship with abundance
 plot(data$X, data$N, main = "", xlab = "Covariate", ylab = "Abundance", las = 1, ylim = c(0, max(data$N)), frame.plot = FALSE)
 lines(data$X, data$lam, type = "l", col = "red", lwd = 3)
 GLM.pred <- exp(predict(glm(apply(data$y, 1, max) ~ X + I(X^2), family = poisson, data = data)))
 lines(data$X, GLM.pred, type = "l", lty = 2, col = "blue", lwd = 3)
-Nmix.pred <- exp(out$mean$alpha0 + out$mean$alpha1 * data$X)
+Nmix.pred <- exp(out$BUGSoutput$mean$alpha0 + (out$BUGSoutput$mean$alpha1 * data$X))
 points(data$X, Nmix.pred, type = "l", col = "blue", lwd = 3)
+mtext("Figure 12.3", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
 
 # 12.3 Analysis of Real Data: Open-Population Binomial Mixture Models
 #-------------------------------------------------------------------------------
 #Get the data and put them into 3D array
-bdat <- read.table("fritillary.txt", header = TRUE)
+bdat <- read.table("/Users/shelbie.ishimaru/Documents/GitHub/BayesianPopulationAnalysis_Learning/fritillary.txt", header = TRUE)
 y <- array(NA, dim = c(95, 2, 7)) #95 sites, 2 reps, 7 days
 for(k in 1:7){
   sel.rows <- bdat$day == k
@@ -306,12 +308,13 @@ print(out0, digits = 3)
 k<-mcmcplots::as.mcmc.rjags(out0)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Evaluation of fit
-plot(out0$sims.list$fit, out0$sims.list$fit.new, main = "", xlab = "Discrepancy actual data", ylab = "Discrepancy replicate data", frame.plot = FALSE)
-abline(0, 1, lwd = 2, col = "black")
+plot(out0$BUGSoutput$sims.list$fit, out0$BUGSoutput$sims.list$fit.new, main = "", xlab = "Discrepancy actual data", ylab = "Discrepancy replicate data", frame.plot = FALSE)
+abline(0, 1, lwd = 2, col = "black") #Mdoel does not fit well at all
 
-mean(out0$sims.list$fit.new > out0$sims.list$fit)
+mean(out0$BUGSoutput$sims.list$fit.new > out0$BUGSoutput$sims.list$fit) 
 
-mean(out0$mean$fit) / mean(out0$mean$fit.new)
+mean(out0$BUGSoutput$mean$fit) / mean(out0$BUGSoutput$mean$fit.new) #lack of fit ratio
+#the bad fit is likely due to the observed occuopancy of 56% and the use of a poisson. The poisson may not be flexible enough to account for all the 0s
 #-------------------------------------------------------------------------------
 
 # 12.3.2 Zero-Inflated Poisson Binomial Mixture Model
@@ -369,11 +372,10 @@ jags.data <- list(y = y, R = R, T = T)
 #Initial values
 Nst <- apply(y, c(1, 3), max) + 1
 Nst[is.na(Nst)] <- 1
-inits <- function(){list(N = Nst, alpha.lam = runif(7, -1, 1))}
+inits <- function(){list(N = Nst, alpha.lam = runif(7, -1, 1), z = rep(1, 95))}
 
 #Parameters monitored
-params <- c("omega", "totalN", "alpha.lam", "p", "mean.abundance",
-            "fit", "fit.new")
+params <- c("omega", "totalN", "alpha.lam", "p", "mean.abundance", "fit", "fit.new")
 
 #MCMC settings
 ni <- 30000
@@ -396,16 +398,16 @@ print(out1, digits = 3)
 k<-mcmcplots::as.mcmc.rjags(out1)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Evaluation of fit
-plot(out1$sims.list$fit, out1$sims.list$fit.new, main = "", xlab =
+plot(out1$BUGSoutput$sims.list$fit, out1$BUGSoutput$sims.list$fit.new, main = "", xlab =
        "Discrepancy actual data", ylab = "Discrepancy replicate data",
      frame.plot = FALSE)
 abline(0, 1, lwd = 2, col = "black")
-mean(out1$sims.list$fit.new > out1$sims.list$fit)
+mean(out1$BUGSoutput$sims.list$fit.new > out1$BUGSoutput$sims.list$fit)
 
-mean(out1$mean$fit) / mean(out1$mean$fit.new)
+mean(out1$BUGSoutput$mean$fit) / mean(out1$BUGSoutput$mean$fit.new) #Still a bad model fit
 #-------------------------------------------------------------------------------
 
-# 12.3.3 Binomial Mixture Model with Overdispersion in Both Abundace and Detection
+# 12.3.3 Binomial Mixture Model with Overdispersion in Both Abundance and Detection
 #-------------------------------------------------------------------------------
 #Specify model in BUGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
@@ -452,8 +454,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   
   #Derived and other quantities
   for (k in 1:7){
-    totalN[k] <- sum(N[,k]) #Estimate total pop. size across all
-    sites
+    totalN[k] <- sum(N[,k]) #Estimate total pop. size across all sites
     mean.abundance[k] <- mean(lambda[,k])
     mean.N[k] <- mean(N[,k])
     mean.detection[k] <- mean(ik.p[,k])
@@ -473,7 +474,7 @@ Nst[is.na(Nst)] <- 1
 inits <- function(){list(N = Nst, alpha.lam = runif(7, -3, 3), beta = runif(7, -3, 3), sd.lam = runif(1, 0, 1), sd.p = runif(1, 0, 1))}
 
 #Parameters monitored
-params <- c("totalN", "alpha.lam", "beta", "sd.lam", "sd.p","mean.abundance", "mean.N", "mean.detection", "fit", "fit.new")
+params <- c("totalN", "alpha.lam", "beta", "sd.lam", "sd.p", "mean.abundance", "mean.N", "mean.detection", "fit", "fit.new")
 
 #MCMC settings
 ni <- 350000
@@ -496,13 +497,13 @@ print(out2, digits = 3)
 k<-mcmcplots::as.mcmc.rjags(out2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Evaluation of fit
-plot(out2$sims.list$fit, out2$sims.list$fit.new, main = "", xlab =
+plot(out2$BUGSoutput$sims.list$fit, out2$BUGSoutput$sims.list$fit.new, main = "", xlab =
      "Discrepancy actual data", ylab = "Discrepancy replicate data",
      frame.plot = FALSE, xlim = c(50, 200), ylim = c(50, 200))
 abline(0, 1, lwd = 2, col = "black")
-mean(out2$sims.list$fit.new > out2$sims.list$fit)
+mean(out2$BUGSoutput$sims.list$fit.new > out2$BUGSoutput$sims.list$fit)
 
-mean(out2$mean$fit) / mean(out2$mean$fit.new)
+mean(out2$BUGSoutput$mean$fit) / mean(out2$BUGSoutput$mean$fit.new) #Good model fit!
 
 #Plot
 max.day.count <- apply(y, c(1, 3), max, na.rm = TRUE)
@@ -513,10 +514,10 @@ par(mfrow = c(2, 1))
 plot(1:7, mean.max.count, xlab = "Day", ylab = "Mean daily abundance",
      las = 1, ylim = c(0, 16), type = "b", main = "", frame.plot = FALSE,
      pch = 16, lwd = 2)
-lines(1:7, out2$summary[24:30,5], type = "b", pch = 16, col = "blue", lwd = 2)
-segments(1:7, out2$summary[24:30,3], 1:7, out2$summary[24:30,7], col = "blue")
-plot(1:7, out2$summary[38:44,1], xlab = "Day", ylab = "Detection
+lines(1:7, out2$BUGSoutput$summary[24:30,5], type = "b", pch = 16, col = "blue", lwd = 2)
+segments(1:7, out2$BUGSoutput$summary[24:30,3], 1:7, out2$BUGSoutput$summary[24:30,7], col = "blue")
+plot(1:7, out2$BUGSoutput$summary[38:44,1], xlab = "Day", ylab = "Detection
      probability ", las = 1, ylim = c(0, 1), type = "b", 
      col = "blue",pch = 16, frame.plot = FALSE, lwd = 2)
-segments(1:7, out2$summary[38:44,3], 1:7, out2$summary[38:44,7], col = "blue")
+segments(1:7, out2$BUGSoutput$summary[38:44,3], 1:7, out2$BUGSoutput$summary[38:44,7], col = "blue")
 #-------------------------------------------------------------------------------
