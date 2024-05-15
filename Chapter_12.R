@@ -510,14 +510,15 @@ max.day.count <- apply(y, c(1, 3), max, na.rm = TRUE)
 max.day.count[max.day.count == "-Inf"] <- NA
 mean.max.count <- apply(max.day.count, 2, mean, na.rm = TRUE)
 mean.max.count
+
 par(mfrow = c(2, 1))
-plot(1:7, mean.max.count, xlab = "Day", ylab = "Mean daily abundance",
-     las = 1, ylim = c(0, 16), type = "b", main = "", frame.plot = FALSE,
-     pch = 16, lwd = 2)
-lines(1:7, out2$BUGSoutput$summary[24:30,5], type = "b", pch = 16, col = "blue", lwd = 2)
-segments(1:7, out2$BUGSoutput$summary[24:30,3], 1:7, out2$BUGSoutput$summary[24:30,7], col = "blue")
-plot(1:7, out2$BUGSoutput$summary[38:44,1], xlab = "Day", ylab = "Detection
-     probability ", las = 1, ylim = c(0, 1), type = "b", 
-     col = "blue",pch = 16, frame.plot = FALSE, lwd = 2)
-segments(1:7, out2$BUGSoutput$summary[38:44,3], 1:7, out2$BUGSoutput$summary[38:44,7], col = "blue")
+#Mean daily abundance per transect
+plot(1:7, mean.max.count, xlab = "Day", ylab = "Mean daily abundance", las = 1, ylim = c(0, 16), type = "b", main = "", frame.plot = FALSE, pch = 16, lwd = 2) #raw counts
+lines(1:7, out2$BUGSoutput$summary[25:31,5], type = "b", pch = 16, col = "blue", lwd = 2) #posterior median
+segments(1:7, out2$BUGSoutput$summary[25:31,3], 1:7, out2$BUGSoutput$summary[25:31,7], col = "blue")
+
+#Detection probability per individual fritillary during each two passes on a transect
+plot(1:7, out2$BUGSoutput$summary[32:38,1], xlab = "Day", ylab = "Detection probability ", las = 1, ylim = c(0, 1), type = "b", col = "blue",pch = 16, frame.plot = FALSE, lwd = 2)
+segments(1:7, out2$BUGSoutput$summary[32:38,3], 1:7, out2$BUGSoutput$summary[32:38,7], col = "blue")
+mtext("Figure 12.6", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
