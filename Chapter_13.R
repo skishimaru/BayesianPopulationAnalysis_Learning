@@ -5,9 +5,9 @@ library(R2jags) #to run JAGS
 library(shinystan) #to run shiny stan
 library(tidyverse) #to utilize pipe operators
 
-# 13.2 What Happens When p<1 and Constant and p is Not Accounted for in a Species Distrbution Model?
+# 13.2 What Happens When p<1 and Constant and p is Not Accounted for in a Species Distribution Model?
 #-------------------------------------------------------------------------------
-nreps <- 10^5 #No. replicates
+nreps <- 10^5 #No. replicates, leave at 10^5 to produce figure 13.1
 estimates <- array(NA, dim = c(nreps, 2)) #Array to contain the estimates
 R <- 250 #No. sites
 
@@ -21,17 +21,17 @@ for (i in 1:nreps) {
 }
 
 par(mfrow = c(3, 1))
-hist(estimates[,1], col = "gray", nclass = 50, main = "", xlab = "Intercept estimates", las = 1, ylab = "", freq = FALSE)
+hist(estimates[,1], col = "gray", nclass = 50, main = "", xlab = "Intercept estimates", las = 1, ylab = "Density", freq = FALSE)
 abline(v = -3, col = "red", lwd = 3) #Truth
-hist(estimates[,2], col = "gray", nclass = 50, main = "", xlab = "Slope estimates", xlim = c(0,1), las = 1, ylab = "", freq = FALSE)
+hist(estimates[,2], col = "gray", nclass = 50, main = "", xlab = "Slope estimates", xlim = c(0,1), las = 1, ylab = "Density", freq = FALSE)
 abline(v = 1, col = "red", lwd = 3) #Truth
 
 plot(1:10, plogis(estimates[1,1] + estimates[1,2] * (1:10)), col ="gray", lwd = 1, ylab = "Occupancy probability", xlab = "Covariate value", type = "l", ylim = c(0, 1), frame.plot = FALSE, las = 1)
 samp <- sample(1:nreps, 1000)
 for (i in samp){
   lines(1:10, plogis(estimates[i,1] + estimates[i,2] * (1:10)), col = "gray", lwd = 1, type = "l")
-}
-lines(1:10, plogis(-3 + 1 * (1:10)), col = "red", lwd = 3, type = "l")
+} #gray line= random sample of 1000 estimated regression lines
+lines(1:10, plogis(-3 + 1 * (1:10)), col = "red", lwd = 3, type = "l") #truth
 mtext("Figure 13.1", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
 
@@ -126,8 +126,7 @@ data.fn <- function(R = 200, T = 3, xmin = -1, xmax = 1, alpha.psi = -1, beta.ps
   #Relationship expected occurrence – covariate
   psi <- plogis(alpha.psi + beta.psi * X) #Apply inverse logit
   
-  #Add Bernoulli noise: draw occurrence indicator z from
-  Bernoulli(psi)
+  #Add Bernoulli noise: draw occurrence indicator z from Bernoulli(psi)
   z <- rbinom(n = R, size = 1, prob = psi)
   occ.fs <- sum(z) #Finite-sample occupancy (see Royle and Kéry, 2007)
   
@@ -151,6 +150,7 @@ data.fn <- function(R = 200, T = 3, xmin = -1, xmax = 1, alpha.psi = -1, beta.ps
   plot(X, p, ylim = c(0,1), main = "Detection probability", xlab = "Covariate", ylab = "p", type = "l", lwd = 3, col = "red", las = 1, frame.plot = FALSE)
   plot(X, naive.pred, main = "Detection/nondetection observations \n and conventional SDM", xlab = "Covariate", ylab = "Apparent occupancy", ylim = c(min(y), max(y)), type = "l", lwd = 3, lty = 2, col = "blue", las = 1, frame.plot = FALSE)
   points(rep(X, T), y)
+  mtext("Figure 13.2", side= 3, line= -1.5, outer= T) #adding main title
   
   #Return stuff
   return(list(R = R, T = T, X = X, alpha.psi = alpha.psi, beta.psi = beta.psi, alpha.p = alpha.p , beta.p = beta.p, psi = psi, z = z, occ.fs = occ.fs, p = p, y = y))
@@ -218,10 +218,11 @@ print(cbind(TRUTH, out$summary[1:5, c(1,2,3,7)]), dig = 3)
 sum(apply(sodata$y, 1, sum) > 0) #Apparent number of occupied sites
 
 naive.pred <- plogis(predict(glm(apply(sodata$y, 1, max) ~ X + I(X^2), family = binomial, data = sodata)))
-lin.pred2 <- out$mean$alpha.occ + out$mean$beta.occ * sodata$X
+lin.pred2 <- out$BUGSoutput$mean$alpha.occ + out$BUGSoutput$mean$beta.occ * sodata$X
 plot(sodata$X, sodata$psi, ylim = c(0, 1), main = "", ylab = "Occupancy probability", xlab = "Covariate", type = "l", lwd = 3, col = "red", las = 1, frame.plot = FALSE)
 lines(sodata$X, naive.pred, ylim = c(0 ,1), type = "l", lty = 2, lwd = 3, col = "blue")
 lines(sodata$X, plogis(lin.pred2), ylim = c(0, 1), type = "l", lty = 1, lwd = 2, col = "blue")
+mtext("Figure 13.3", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
 
 # 13.4 Analysis of A Real Data Set: Single-Season Occupancy Model
@@ -313,37 +314,40 @@ print(out, digits = 3)
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 #Posterior distribution of the number of occupied woodpiles in actual sample
-hist(out$sims.list$occ.fs, nclass = 30, col = "gray", main = "", xlab = "Number of occupied woodpiles (occ.fs)", xlim = c(9, 27))
+hist(out$BUGSoutput$sims.list$occ.fs, nclass = 30, col = "gray", main = "", xlab = "Number of occupied woodpiles (occ.fs)", xlim = c(9, 27))
 abline(v = 10, lwd = 2) #The observed number
+mtext("Figure 13.5", side= 3, line= -1.5, outer= T) #adding main title
 
-Pstar <- array(NA, dim = c(out$n.sims, 10))
+Pstar <- array(NA, dim = c(out$BUGSoutput$n.sims, 10))
 x <- cbind(rep(1, 3000), rep(2, 3000), rep(3, 3000), rep(4, 3000), rep(5, 3000), rep(6, 3000), rep(7, 3000), rep(8, 3000), rep(9, 3000), rep(10, 3000))
-for (i in 1:out$n.sims) {
+for (i in 1:out$BUGSoutput$n.sims) {
   for (j in 1:10){
-    Pstar[i,j] <- 1 - (1 - out$sims.list$mean.p[i])^j
+    Pstar[i,j] <- 1 - (1 - out$BUGSoutput$sims.list$mean.p[i])^j
   } 
 } 
 
 boxplot(Pstar ~ x, col = "gray", las = 1, ylab = "Pstar", xlab = "Number of surveys", outline = FALSE)
 abline(h = 0.95, lty = 2, lwd = 2)
+mtext("Figure 13.6", side= 3, line= -1.5, outer= T) #adding main title
 
 par(mfrow = c(2, 1))
-hist(plogis(out$sims.list$alpha.psi), nclass = 40, col = "gray", main = "Forest interior", xlab = "Occupancy probability", xlim = c(0, 1))
-hist(plogis(out$sims.list$alpha.psi+ out$sims.list$beta.psi), nclass = 40, col = "gray", main = "Forest edge", xlab = "Occupancy probability", xlim = c(0, 1))
+hist(plogis(out$BUGSoutput$sims.list$alpha.psi), nclass = 40, col = "gray", main = "Forest interior", xlab = "Occupancy probability", xlim = c(0, 1))
+hist(plogis(out$BUGSoutput$sims.list$alpha.psi+ out$BUGSoutput$sims.list$beta.psi), nclass = 40, col = "gray", main = "Forest edge", xlab = "Occupancy probability", xlim = c(0, 1))
+mtext("Figure 13.7", side= 3, line= -1.5, outer= T) #adding main title
 
 #Predict effect of time of day with uncertainty
-mcmc.sample <- out$n.sims
+mcmc.sample <- out$BUGSoutput$n.sims
 original.date.pred <- seq(0, 60, length.out = 30)
 original.hour.pred <- seq(180, 540, length.out = 30)
 date.pred <- (original.date.pred - mean.date)/sd.date
 hour.pred <- (original.hour.pred - mean.hour)/sd.hour
-p.pred.date <- plogis(out$mean$alpha.p + out$mean$beta1.p * date.pred + out$mean$beta2.p * date.pred^2)
-p.pred.hour <- plogis(out$mean$alpha.p + out$mean$beta3.p * hour.pred + out$mean$beta4.p * hour.pred^2 )
+p.pred.date <- plogis(out$BUGSoutput$mean$alpha.p + out$BUGSoutput$mean$beta1.p * date.pred + out$BUGSoutput$mean$beta2.p * date.pred^2)
+p.pred.hour <- plogis(out$BUGSoutput$mean$alpha.p + out$BUGSoutput$mean$beta3.p * hour.pred + out$BUGSoutput$mean$beta4.p * hour.pred^2 )
 array.p.pred.hour <- array.p.pred.date <- array(NA, dim = c(length(hour.pred), mcmc.sample))
 
 for (i in 1:mcmc.sample){
-  array.p.pred.date[,i] <- plogis(out$sims.list$alpha.p[i] + out$sims.list$beta1.p[i] * date.pred + out$sims.list$beta2.p[i] * date.pred^2)
-  array.p.pred.hour[,i] <- plogis(out$sims.list$alpha.p[i] + out$sims.list$beta3.p[i] * hour.pred + out$sims.list$beta4.p[i] * hour.pred^2)
+  array.p.pred.date[,i] <- plogis(out$BUGSoutput$sims.list$alpha.p[i] + out$BUGSoutput$sims.list$beta1.p[i] * date.pred + out$BUGSoutput$sims.list$beta2.p[i] * date.pred^2)
+  array.p.pred.hour[,i] <- plogis(out$BUGSoutput$sims.list$alpha.p[i] + out$BUGSoutput$sims.list$beta3.p[i] * hour.pred + out$BUGSoutput$sims.list$beta4.p[i] * hour.pred^2)
 }
 
 #Plot for a subsample of MCMC draws
@@ -364,13 +368,14 @@ for (i in sub.set){
 }
 
 lines(original.hour.pred, p.pred.hour, type = "l", lwd = 3, col = "blue")
+mtext("Figure 13.8", side= 3, line= -1.5, outer= T) #adding main title
 #-------------------------------------------------------------------------------
 
 # 13.5 Dynamic (Multiseason) Site-Occupancy Models
 # 13.5.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
-data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)) {
-  #Function to simulate detection/nondetection data for dynamic site-occ model
+data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)) {  #Function to simulate detection/nondetection data for dynamic site-occ model
+  #R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)
   #Annual variation in probabilities of patch survival, colonization and
   #detection is specified by the bounds of a uniform distribution.
   #Function arguments:
@@ -381,102 +386,100 @@ data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), r
   #range.p – bounds of uniform distribution from which annual p drawn
   #range.psi and range.gamma – same for survival and colonization probability
   
-  #Set up some required arrays
-  site <- 1:R #Sites
-  year <- 1:K #Years
-  psi <- rep(NA, K) #Occupancy probability
-  muZ <- z <- array(dim = c(R, K)) #Expected and realized occurrence
-  y <- array(NA, dim = c(R, J, K)) #Detection histories
+  # Set up some required arrays
+  site <- 1:R					# Sites
+  year <- 1:K					# Years
+  psi <- rep(NA, K)				# Occupancy probability
+  muZ <- z <- array(dim = c(R, K))	# Expected and realized occurrence
+  y <- array(NA, dim = c(R, J, K))	# Detection histories
   
-  #Determine initial occupancy and demographic parameters
-  psi[1] <- psi1 #Initial occupancy probability
+  # Determine initial occupancy and demographic parameters
+  psi[1] <- psi1				# Initial occupancy probability
   p <- runif(n = K, min = range.p[1], max = range.p[2])
   phi <- runif(n = K-1, min = range.phi[1], max = range.phi[2])
   gamma <- runif(n = K-1, min = range.gamma[1], max = range.gamma[2])
   
-  #Generate latent states of occurrence
-  #First year
-  z[,1] <- rbinom(R, 1, psi[1]) #Initial occupancy state
-  
-  #Later years
-  for(i in 1:R){ #Loop over sites
-    for(k in 2:K){ #Loop over years
-      muZ[k] <- z[i, k-1]*phi[k-1] + (1-z[i, k-1])*gamma[k-1]
-      #Prob for occ.
+  # Generate latent states of occurrence
+  # First year
+  z[,1] <- rbinom(R, 1, psi[1])		# Initial occupancy state
+  # Later years
+  for(i in 1:R){				# Loop over sites
+    for(k in 2:K){				# Loop over years
+      muZ[k] <- z[i, k-1]*phi[k-1] + (1-z[i, k-1])*gamma[k-1] # Prob for occ.
       z[i,k] <- rbinom(1, 1, muZ[k])
-    } 
-  } 
+    }
+  }
   
-  #Plot realized occupancy
+  # Plot realized occupancy
   plot(year, apply(z, 2, mean), type = "l", xlab = "Year", ylab = "Occupancy or Detection prob.", col = "red", xlim = c(0,K+1), ylim = c(0,1), lwd = 2, lty = 1, frame.plot = FALSE, las = 1)
-  lines(year, p, type = "l", col = "red", lwd = 2, lty = 2)
+  lines(year, p , type = "l", col = "red", lwd = 2, lty = 2)
   
-  #Generate detection/nondetection data
+  # Generate detection/nondetection data
   for(i in 1:R){
     for(k in 1:K){
       prob <- z[i,k] * p[k]
       for(j in 1:J){
         y[i,j,k] <- rbinom(1, 1, prob)
-      } 
-    } 
-  } 
+      }
+    }
+  }
   
-  #Compute annual population occupancy
+  # Compute annual population occupancy
   for (k in 2:K){
     psi[k] <- psi[k-1]*phi[k-1] + (1-psi[k-1])*gamma[k-1]
   }
   
-  #Plot apparent occupancy
+  # Plot apparent occupancy
   psi.app <- apply(apply(y, c(1,3), max), 2, mean)
   lines(year, psi.app, type = "l", col = "black", lwd = 2)
-  text(0.85*K, 0.06, labels = "red solid – true occupancy\n red dashed – detection\n black – observed occupancy")
+  text(0.85*K, 0.06, labels = "red solid - true occupancy\n red dashed - detection\n black - observed occupancy")
   
-  #Return data
+  # Return data
   return(list(R = R, J = J, K = K, psi = psi, psi.app = psi.app, z = z, phi = phi, gamma = gamma, p = p, y = y))
 }
 
 data <- data.fn(R = 250, J = 3, K = 10, psi1 = 0.6, range.p = c(0.1, 0.9), range.phi = c(0.7, 0.9), range.gamma = c(0.1, 0.5))
 
-attach(data)
-str(data)
+#attach(data)
+#str(data)
 
 #Specify model in BUGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
-  #Specify priors
+  # Specify priors
   psi1 ~ dunif(0, 1)
   for (k in 1:(nyear-1)){
     phi[k] ~ dunif(0, 1)
     gamma[k] ~ dunif(0, 1)
-    p[k] ~ dunif(0, 1)
+    p[k] ~ dunif(0, 1) 
   }
   p[nyear] ~ dunif(0, 1)
   
-  #Ecological submodel: Define state conditional on parameters
+  # Ecological submodel: Define state conditional on parameters
   for (i in 1:nsite){
     z[i,1] ~ dbern(psi1)
     for (k in 2:nyear){
       muZ[i,k]<- z[i,k-1]*phi[k-1] + (1-z[i,k-1])*gamma[k-1]
       z[i,k] ~ dbern(muZ[i,k])
-    } 
-  } 
+    } #k
+  } #i
   
-  #Observation model
+  # Observation model
   for (i in 1:nsite){
     for (j in 1:nrep){
       for (k in 1:nyear){
         muy[i,j,k] <- z[i,k]*p[k]
         y[i,j,k] ~ dbern(muy[i,j,k])
-      } 
-    } 
-  } 
+      } #k
+    } #j
+  } #i
   
-  #Derived parameters: Sample and population occupancy, growth rate and turnover
+  # Derived parameters: Sample and population occupancy, growth rate and turnover
   psi[1] <- psi1
   n.occ[1]<-sum(z[1:nsite,1])
   for (k in 2:nyear){
     psi[k] <- psi[k-1]*phi[k-1] + (1-psi[k-1])*gamma[k-1]
     n.occ[k] <- sum(z[1:nsite,k])
-    growthr[k] <- psi[k]/psi[k-1]
+    growthr[k-1] <- psi[k]/psi[k-1]                         # originally we had growthr[k]. JAGS seem to dislike vectoring going from 2..K.
     turnover[k-1] <- (1 - psi[k-1]) * gamma[k-1]/psi[k]
   }
 }
@@ -484,14 +487,14 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Bundle data
 jags.data <- list(y = y, nsite = dim(y)[1], nrep = dim(y)[2], nyear = dim(y)[3])
 
-#Initial values
-Zst <- apply(y, c(1, 3), max) #Observed occurrence as inits for z
+# Initial values
+zst <- apply(y, c(1,3), max)	# Observed occurrence as inits for z
 inits <- function(){ list(z = zst)}
 
-#Parameters monitored
+# Parameters monitored
 params <- c("psi", "phi", "gamma", "p", "n.occ", "growthr", "turnover")
 
-#MCMC settings
+# MCMC settings
 ni <- 2500
 nt <- 4
 nb <- 500
@@ -511,15 +514,19 @@ print(out, digits = 2)
 
 k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
-print(cbind(data$psi, out$summary[1:K, c(1, 2, 3, 7)]), dig = 3)
-print(cbind(data$phi, out$summary[(K+1):(K+(K-1)), c(1, 2, 3, 7)]), dig = 3)
-print(cbind(data$gamma, out$summary[(2*K):(2*K+(K-2)), c(1, 2, 3, 7)]), dig = 3)
-print(cbind(data$p, out$summary[(3*K-1):(4*K-2), c(1, 2, 3, 7)]), dig = 3)
+psiall <- paste("psi[", 1:K, "]", sep="")
+print(cbind(data$psi, out$BUGSoutput$summary[psiall, c(1, 2, 3, 7)]), dig = 3)
+phiall <- paste("phi[", 1:(K-1), "]", sep="")
+print(cbind(data$phi, out$BUGSoutput$summary[phiall, c(1, 2, 3, 7)]), dig = 3)
+gammaall <- paste("gamma[", 1:(K-1), "]", sep="")
+print(cbind(data$gamma, out$BUGSoutput$summary[gammaall, c(1, 2, 3, 7)]), dig = 3)
+pall <- paste("p[", 1:K, "]", sep="")
+print(cbind(data$p, out$BUGSoutput$summary[pall, c(1, 2, 3, 7)]), dig = 3)
 
 plot(1:K, data$psi, type = "l", xlab = "Year", ylab = "Occupancy probability", col = "red", xlim = c(0,K+1), ylim = c(0,1), lwd = 2, lty = 1, frame.plot = FALSE, las = 1)
 lines(1:K, data$psi.app, type = "l", col = "black", lwd = 2)
-points(1:K, out$mean$psi, type = "l", col = "blue", lwd = 2)
-segments(1:K, out$summary[1:K,3], 1:K,out$summary[1:K,7], col = "blue", lwd = 1)
+points(1:K, out$BUGSoutput$mean$psi, type = "l", col = "blue", lwd = 2)
+segments(1:K, out$BUGSoutput$summary[psiall,3], 1:K, out$BUGSoutput$summary[psiall,7], col = "blue", lwd = 1) 
 #-------------------------------------------------------------------------------
 
 # 13.5.2 Dynamic Occupancy Modeling in a Real Data Set
@@ -635,10 +642,11 @@ print(out2, digits = 2)
 
 k<-mcmcplots::as.mcmc.rjags(out2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
-DAY <- cbind(rep(1, out2$n.sims), rep(2, out2$n.sims), rep(3,out2$n.sims), rep(4, out2$n.sims), rep(5, out2$n.sims), rep(6,out2$n.sims), rep(7, out2$n.sims))
-boxplot(out2$sims.list$psi ~ DAY, col = "gray", ylab = "Occupancy probability", xlab = "Day of survey", las = 1, frame.plot = FALSE)
+DAY <- cbind(rep(1, out2$BUGSoutput$n.sims), rep(2, out2$BUGSoutput$n.sims), rep(3,out2$BUGSoutput$n.sims), rep(4, out2$BUGSoutput$n.sims), rep(5, out2$BUGSoutput$n.sims), rep(6,out2$BUGSoutput$n.sims), rep(7, out2$BUGSoutput$n.sims))
+boxplot(out2$BUGSoutput$sims.list$psi ~ DAY, col = "gray", ylab = "Occupancy probability", xlab = "Day of survey", las = 1, frame.plot = FALSE)
+mtext("Figure 13.12", side= 3, line= -1.5, outer= T) #adding main title
 
-apply(apply(y, c(1,3), max), 2, function(x){sum(!is.na(x))})
+apply(apply(y, c(1,3), max), 2, function(x){sum(!is.na(x))}) #comparing sample sizes for eahc day
 #-------------------------------------------------------------------------------
 
 # 13.6 Multistate Occupancy Models
@@ -705,7 +713,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Bundle data
 y <- as.matrix(owls[, 2:6])
 y <- y + 1
-win.data <- list(y = y, R = dim(Y)[1], T = dim(Y)[2])
+jags.data <- list(y = y, R = dim(y)[1], T = dim(y)[2])
 
 #Initial values
 zst <- apply(y, 1, max, na.rm = TRUE)
@@ -806,5 +814,4 @@ out2 <- jags(data  = jags.data,
 print(out2, digits = 2)
 
 k<-mcmcplots::as.mcmc.rjags(out2)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
-
 #-------------------------------------------------------------------------------
