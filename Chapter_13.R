@@ -374,17 +374,18 @@ mtext("Figure 13.8", side= 3, line= -1.5, outer= T) #adding main title
 # 13.5 Dynamic (Multiseason) Site-Occupancy Models
 # 13.5.1 Generation and Analysis of Simulated Data
 #-------------------------------------------------------------------------------
-data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)) {  #Function to simulate detection/nondetection data for dynamic site-occ model
-  #R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)
-  #Annual variation in probabilities of patch survival, colonization and
-  #detection is specified by the bounds of a uniform distribution.
-  #Function arguments:
-  #R – Number of sites
-  #J – Number of replicate surveys
-  #K – Number of years
-  #psi1 – occupancy probability in first year
-  #range.p – bounds of uniform distribution from which annual p drawn
-  #range.psi and range.gamma – same for survival and colonization probability
+data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), range.phi = c(0.6, 0.8), range.gamma = c(0, 0.1)) {
+  # Function to simulate detection/nondetection data for dynamic site-occ model
+  # Annual variation in probabilities of patch survival, colonization and 
+  # detection is specified by the bounds of a uniform distribution.
+  
+  # Function arguments:
+  # R - Number of sites
+  # J - Number of replicate surveys
+  # K - Number of years
+  # psi1 - occupancy probability in first year
+  # range.p - bounds of uniform distribution from which annual p drawn 
+  # range.psi and range.gamma - same for survival and colonization probability
   
   # Set up some required arrays
   site <- 1:R					# Sites
@@ -410,7 +411,7 @@ data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), r
     }
   }
   
-  # Plot realized occupancy
+  # Plot realised occupancy
   plot(year, apply(z, 2, mean), type = "l", xlab = "Year", ylab = "Occupancy or Detection prob.", col = "red", xlim = c(0,K+1), ylim = c(0,1), lwd = 2, lty = 1, frame.plot = FALSE, las = 1)
   lines(year, p , type = "l", col = "red", lwd = 2, lty = 2)
   
@@ -440,10 +441,10 @@ data.fn <- function(R = 250, J = 3, K = 10, psi1 = 0.4, range.p = c(0.2, 0.4), r
 
 data <- data.fn(R = 250, J = 3, K = 10, psi1 = 0.6, range.p = c(0.1, 0.9), range.phi = c(0.7, 0.9), range.gamma = c(0.1, 0.5))
 
-#attach(data)
-#str(data)
+attach(data)
+str(data)
 
-#Specify model in BUGS language
+#Specify model in JAGS language
 jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
   # Specify priors
   psi1 ~ dunif(0, 1)
@@ -451,7 +452,7 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     phi[k] ~ dunif(0, 1)
     gamma[k] ~ dunif(0, 1)
     p[k] ~ dunif(0, 1) 
-  }
+    }
   p[nyear] ~ dunif(0, 1)
   
   # Ecological submodel: Define state conditional on parameters
@@ -488,11 +489,11 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 jags.data <- list(y = y, nsite = dim(y)[1], nrep = dim(y)[2], nyear = dim(y)[3])
 
 # Initial values
-zst <- apply(y, c(1,3), max)	# Observed occurrence as inits for z
+zst <- apply(y, c(1, 3), max)	# Observed occurrence as inits for z
 inits <- function(){ list(z = zst)}
 
 # Parameters monitored
-params <- c("psi", "phi", "gamma", "p", "n.occ", "growthr", "turnover")
+params <- c("psi", "phi", "gamma", "p", "n.occ", "growthr", "turnover") 
 
 # MCMC settings
 ni <- 2500
@@ -501,7 +502,7 @@ nb <- 500
 nc <- 3
 
 #Call JAGS from R
-out <- jags(data  = jags.data,
+outt <- jags(data  = jags.data,
             inits = inits,
             parameters.to.save = params,
             model.file = jags.model.txt,
@@ -510,23 +511,23 @@ out <- jags(data  = jags.data,
             n.iter = ni,
             n.burnin = nb)
 
-print(out, digits = 2)
+print(outt, digits = 2)
 
-k<-mcmcplots::as.mcmc.rjags(out)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
+k<-mcmcplots::as.mcmc.rjags(outt)%>%as.shinystan()%>%launch_shinystan() #making it into a MCMC, each list element is a chain, then puts it through to shiny stan
 
 psiall <- paste("psi[", 1:K, "]", sep="")
-print(cbind(data$psi, out$BUGSoutput$summary[psiall, c(1, 2, 3, 7)]), dig = 3)
+print(cbind(data$psi, outt$BUGSoutput$summary[psiall, c(1, 2, 3, 7)]), dig = 3)
 phiall <- paste("phi[", 1:(K-1), "]", sep="")
-print(cbind(data$phi, out$BUGSoutput$summary[phiall, c(1, 2, 3, 7)]), dig = 3)
+print(cbind(data$phi, outt$BUGSoutput$summary[phiall, c(1, 2, 3, 7)]), dig = 3)
 gammaall <- paste("gamma[", 1:(K-1), "]", sep="")
-print(cbind(data$gamma, out$BUGSoutput$summary[gammaall, c(1, 2, 3, 7)]), dig = 3)
+print(cbind(data$gamma, outt$BUGSoutput$summary[gammaall, c(1, 2, 3, 7)]), dig = 3)
 pall <- paste("p[", 1:K, "]", sep="")
-print(cbind(data$p, out$BUGSoutput$summary[pall, c(1, 2, 3, 7)]), dig = 3)
+print(cbind(data$p, outt$BUGSoutput$summary[pall, c(1, 2, 3, 7)]), dig = 3)
 
 plot(1:K, data$psi, type = "l", xlab = "Year", ylab = "Occupancy probability", col = "red", xlim = c(0,K+1), ylim = c(0,1), lwd = 2, lty = 1, frame.plot = FALSE, las = 1)
 lines(1:K, data$psi.app, type = "l", col = "black", lwd = 2)
-points(1:K, out$BUGSoutput$mean$psi, type = "l", col = "blue", lwd = 2)
-segments(1:K, out$BUGSoutput$summary[psiall,3], 1:K, out$BUGSoutput$summary[psiall,7], col = "blue", lwd = 1) 
+points(1:K, outt$BUGSoutput$mean$psi, type = "l", col = "blue", lwd = 2)
+segments(1:K, outt$BUGSoutput$summary[psiall,3], 1:K, outt$BUGSoutput$summary[psiall,7], col = "blue", lwd = 1) 
 #-------------------------------------------------------------------------------
 
 # 13.5.2 Dynamic Occupancy Modeling in a Real Data Set
