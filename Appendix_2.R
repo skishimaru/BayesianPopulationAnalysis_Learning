@@ -11,7 +11,7 @@ library(tidyverse) #to utilize pipe operators
 #Define mean survival, transitions, recapture, as well as number of occasions, states, observations and released individuals
 phi.juv <- 0.3
 phi.ad <- 0.65
-p <- 0.5
+p <- 0.5 #recapture probability (for adults only)
 n.occasions <- 6
 n.states <- 3
 n.obs <- 3
@@ -48,6 +48,51 @@ for (i in 1:totrel){
       0, 0, 1 ), nrow = n.states, byrow = TRUE)
   } 
 } 
+
+#Define function to simulate multistate capture-recapture data
+#FROM CHAPTER 9 CODE
+simul.ms <- function(PSI.STATE, PSI.OBS, marked, unobservable = NA){
+  #Unobservable: number of state that is unobservable
+  n.occasions <- dim(PSI.STATE)[4] + 1
+  CH <- CH.TRUE <- matrix(NA, ncol = n.occasions, nrow = sum(marked))
+  #Define a vector with the occasion of marking
+  mark.occ <- matrix(0, ncol = dim(PSI.STATE)[1], nrow = sum(marked))
+  g <- colSums(marked)
+  for (s in 1:dim(PSI.STATE)[1]){
+    if (g[s]==0) next # To avoid error message if nothing to replace
+    mark.occ[(cumsum(g[1:s])-g[s]+1)[s]:cumsum(g[1:s])[s],s] <-
+      rep(1:n.occasions, marked[1:n.occasions,s])
+  }
+  for (i in 1:sum(marked)){
+    for (s in 1:dim(PSI.STATE)[1]){
+      if (mark.occ[i,s]==0) next
+      first <- mark.occ[i,s]
+      CH[i,first] <- s
+      CH.TRUE[i,first] <- s
+    } #s
+    for (t in (first+1):n.occasions){
+      #Multinomial trials for state transitions
+      if (first==n.occasions) next
+      state <- which(rmultinom(1, 1, PSI.STATE[CH.TRUE[i,t-1],,i,t-1])==1)
+      CH.TRUE[i,t] <- state
+      #Multinomial trials for observation process
+      event <- which(rmultinom(1, 1, PSI.OBS[CH.TRUE[i,t],,i,t-1])==1)
+      CH[i,t] <- event
+    } 
+  } 
+  #Replace the NA and the highest state number (dead) in the file by 0
+  CH[is.na(CH)] <- 0
+  CH[CH==dim(PSI.STATE)[1]] <- 0
+  CH[CH==unobservable] <- 0
+  id <- numeric(0)
+  for (i in 1:dim(CH)[1]){
+    z <- min(which(CH[i,]!=0))
+    ifelse(z==dim(CH)[2], id <- c(id,i), id <- c(id))
+  }
+  return(list(CH=CH[-id,], CH.TRUE=CH.TRUE[-id,]))
+  #CH: capture-histories to be used
+  #CH.TRUE: capture-histories with perfect observation
+}
 
 #Execute simulation function
 sim <- simul.ms(PSI.STATE, PSI.OBS, marked)
@@ -134,8 +179,20 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
 #Bundle data
 jags.data <- list(Y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1])
 
-#Initial values
-inits <- function(){list(mean.phijuv = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = ch.init(rCH, f))}
+#Initial Values
+age.ms.init <- function(ch){
+  init <- ch
+  al <- which(ch==2, arr.ind = T)
+  for (i in 1:nrow(al)){
+    init[al[i,1], f[al[i,1]]:al[i,2]] <- 2
+  }
+  for (i in 1:nrow(init)){
+    init[i,1:f[i]] <- NA
+  }
+  return(init)
+}
+
+inits <- function(){list(mean.phijuv = runif(1, 0, 1), mean.phiad = runif(1, 0, 1), mean.p = runif(1, 0, 1), z = age.ms.init(rCH))}  
 
 #Parameters monitored
 params <- c("mean.phijuv", "mean.phiad", "mean.p")
@@ -276,18 +333,43 @@ jags.model.txt <- function(){  #CHANGED FROM BOOK SINK FUNCTION
     z[i,f[i]] <- Y[i,f[i]]
     for (t in (f[i]+1):n.occasions){
       #State equation: draw S(t) given S(t-1)
-      z[i,t] ~ dcat(ps[z[i,t−1], i, t−1,])
+      z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
       #Observation equation: draw O(t) given S(t)
-      Y[i,t] ~ dcat(po[z[i,t], i, t−1,])
+      Y[i,t] ~ dcat(po[z[i,t], i, t-1,])
     } 
   } 
+}
+
+#Function to create known latent states z
+#FROM CHAPTER 9
+known.state.ms <- function(ms, notseen){
+  #notseen: label for ‘not seen’
+  state <- ms
+  state[state==notseen] <- NA
+  for (i in 1:dim(ms)[1]){
+    m <- min(which(!is.na(state[i,])))
+    state[i,m] <- NA
+  }
+  return(state)
+}
+
+#Function to create initial values for unknown z
+#FROM CHAPTER 9
+ms.init.z <- function(ch, f){
+  for (i in 1:dim(ch)[1]){ch[i,1:f[i]] <- NA}
+  states <- max(ch, na.rm = TRUE)
+  known.states <- 1:(states-1)
+  v <- which(ch==states)
+  ch[-v] <- NA
+  ch[v] <- sample(known.states, length(v), replace = TRUE)
+  return(ch)
 }
 
 #Bundle data
 jags.data <- list(Y = rCH, f = f, n.occasions = dim(rCH)[2], nind = dim(rCH)[1], z = known.state.ms(rCH, 2))
 
 #Initial values
-inits <- function(){list(mean.phi = runif(1, 0, 1), mean.pss =runif(1, 0, 1), mean.pns = runif(1, 0, 1), z = ms.init.z(rCH, f))}
+inits <- function(){list(mean.phi = runif(1, 0, 1), mean.pss =runif(1, 0, 1), mean.pns = runif(1, 0, 1), z = 2*ms.init.z(rCH, f))}
 
 #Parameters monitored
 params <- c("mean.phi", "mean.pss", "mean.pns")
